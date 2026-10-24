@@ -9,6 +9,15 @@ import Foundation
 import UniformTypeIdentifiers
 import Combine
 
+// ==========================================
+// THÊM ENUM NÀY ĐỂ FIX LỖI BUILD (exit code 65)
+// ==========================================
+enum fmAppsDisplayMode: String {
+    case appName
+    case bundleID
+    case UUID
+}
+
 struct santanderclipitem {
     let path: String
     let isdir: Bool
@@ -226,7 +235,6 @@ enum santanderfs {
         let fm = FileManager.default
         var info: FileInfoProperties = FileInfoProperties(fileExists: false, kind: "", uttype: "", size: 0, created: "", modified: "", isSymlink: false, posixPerms: "", owner: "", group: "", readable: false, writable: false, executable: false)
         
-        // check if file exists & get type
         var isdir = ObjCBool(false)
         let exists = fm.fileExists(atPath: path, isDirectory: &isdir)
         
@@ -235,7 +243,6 @@ enum santanderfs {
             info.kind = isdir.boolValue ? "directory" : "file"
         }
         
-        // get particular file info
         let url = URL(fileURLWithPath: path)
         let keys: Set<URLResourceKey> = [.contentTypeKey, .fileSizeKey, .creationDateKey, .contentModificationDateKey, .isSymbolicLinkKey]
         
@@ -257,7 +264,6 @@ enum santanderfs {
             }
         }
         
-        // now get permissions
         if let attrs = try? fm.attributesOfItem(atPath: path) {
             if let perms = attrs[.posixPermissions] as? NSNumber {
                 info.posixPerms = String(format: "%04o", perms.intValue)
