@@ -9,7 +9,8 @@ struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
     
     @AppStorage("selectedMethod") private var selectedmethod: method = .hybrid
-    @AppStorage("logsdisplaymode") private var logsdisplaymode: logsdisplaymode = .toolbar
+    // ĐÃ ĐỔI TÊN BIẾN THÀNH logsMode ĐỂ KHÔNG BỊ TRÙNG VỚI TÊN ENUM
+    @AppStorage("logsdisplaymode") private var logsMode: logsdisplaymode = .toolbar
     @AppStorage("loggerNoBS") private var loggernobs: Bool = true
     @AppStorage("keepAlive") private var keepalive: Bool = false
     
@@ -37,7 +38,8 @@ struct SettingsView: View {
                 
                 // CÁC CÀI ĐẶT KHÁC CỦA APP (GIỮ LẠI)
                 Section(header: Text("Logs")) {
-                    Picker("Display Mode", selection: $logsdisplaymode) {
+                    Picker("Display Mode", selection: $logsMode) {
+                        // Sửa lại thành logsdisplaymode.toolbar (gọi trực tiếp từ enum)
                         Text("Toolbar").tag(logsdisplaymode.toolbar)
                         Text("Content").tag(logsdisplaymode.content)
                         Text("Tabs").tag(logsdisplaymode.tabs)
