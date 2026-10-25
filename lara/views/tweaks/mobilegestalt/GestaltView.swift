@@ -301,8 +301,8 @@ struct GestaltView: View {
                 throw "GestaltAccess only supports iOS 27 beta 1–4. Current build: \(GestaltAccess.currentOSBuild())"
             }
             
-            // Gọi hàm saveGestalt của ObjC qua Swift (Dùng try thay vì &error)
-            try access.saveGestalt(mgCurrentDict as [AnyHashable : Any])
+            // Ép kiểu as! [AnyHashable : Any] để tương thích với hàm Objective-C
+            try access.saveGestalt(mgCurrentDict as! [AnyHashable : Any])
             
             Alertinator.shared.alert(
                 title: "Successfully applied MobileGestalt!",
@@ -324,8 +324,8 @@ struct GestaltView: View {
                 let restored = try loadMutablePlistDictionary(from: mgSavedURL)
                 let access = GestaltAccess.shared()
                 
-                // Gọi hàm saveGestalt của ObjC qua Swift (Dùng try thay vì &error)
-                try access.saveGestalt(restored as [AnyHashable : Any])
+                // Ép kiểu as! [AnyHashable : Any] để tương thích với hàm Objective-C
+                try access.saveGestalt(restored as! [AnyHashable : Any])
                 
                 mgCurrentDict = restored
             } else {
