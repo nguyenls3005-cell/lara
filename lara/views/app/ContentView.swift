@@ -5,8 +5,7 @@
 
 import SwiftUI
 import UniformTypeIdentifiers
-import Network
-import SystemConfiguration
+import Darwin
 
 struct ContentView: View {
     @EnvironmentObject private var mgr: laramgr
@@ -216,71 +215,71 @@ struct ContentView: View {
         }
     }
     
-    // MARK: - Xử lý Pairing File (Đã sửa)
+    // MARK: - LOGIC PAIRING FILE CHUẨN TỪ AIRCARD (PairingController.swift)
     private func handlePairingImport(result: Result<[URL], Error>) {
         switch result {
         case .success(let urls):
             guard let url = urls.first else { return }
+            
+            // Logic từ AirCard: Chỉ cần file có dữ liệu (không rỗng) là hợp lệ
+            guard let data = try? Data(contentsOf: url), !data.isEmpty else {
+                alertMessage = "Invalid pairing file. The file is empty (0 bytes)."
+                showSuccessAlert = true
+                return
+            }
+            
+            // Lưu file pairing vào thư mục Documents để sử dụng sau này
+            let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            let destURL = documentsDir.appendingPathComponent("airlift_pairing.plist")
             do {
-                // Kiểm tra kích thước file, tránh file rỗng
-                let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-                if let fileSize = attributes[.size] as? NSNumber, fileSize.intValue == 0 {
-                    alertMessage = "Pairing file is empty (0 bytes). Please select a valid file."
-                    showSuccessAlert = true
-                    return
-                }
-                
-                let data = try Data(contentsOf: url)
-                // Thử đọc plist để xác thực
-                if let plist = try PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any] {
-                    // Chấp nhận nếu là plist hợp lệ. Không cần kiểm tra key cụ thể
-                    hasPairingFile = true
-                    pairingFileName = url.lastPathComponent
-                    alertMessage = "Pairing file imported successfully."
-                    showSuccessAlert = true
-                } else {
-                    alertMessage = "Invalid pairing file. The file is not a valid property list."
-                    showSuccessAlert = true
-                }
+                try data.write(to: destURL, options: .atomic)
+                hasPairingFile = true
+                pairingFileName = url.lastPathComponent
+                alertMessage = "Pairing file imported successfully."
+                showSuccessAlert = true
             } catch {
-                alertMessage = "Failed to read pairing file: \(error.localizedDescription)"
+                alertMessage = "Failed to save pairing file: \(error.localizedDescription)"
                 showSuccessAlert = true
             }
+            
         case .failure(let error):
             alertMessage = "Import failed: \(error.localizedDescription)"
             showSuccessAlert = true
         }
     }
     
-    // MARK: - Quét Tunnel (Đã sửa chuẩn AirCard-iOS)
+    // MARK: - LOGIC TUNNEL CHUẨN TỪ AIRCARD (NetworkStatus.swift)
     private func checkTunnelStatus() {
-        // Sử dụng CFNetworkCopySystemProxySettings để kiểm tra chính xác
-        guard let cfSettings = CFNetworkCopySystemProxySettings(),
-              let settings = cfSettings.takeRetainedValue() as? [String: Any],
-              let scoped = settings["__SCOPED__"] as? [String: Any] else {
+        // Logic từ AirCard: Dùng getifaddrs để quét tất cả interface IPv4
+        var ifaddr: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&ifaddr) == 0, let firstAddr = ifaddr else {
             isTunnelActive = false
-            alertMessage = "No tunnel detected. Please ensure LocalDevVPN is running."
+            alertMessage = "Failed to scan network interfaces."
             showSuccessAlert = true
             return
         }
+        defer { freeifaddrs(ifaddr) }
         
-        var isActive = false
-        // Các tiền tố interface của VPN
-        let vpnPrefixes = ["utun", "tun", "ppp", "ipsec", "tap"]
-        
-        for interfaceName in scoped.keys {
-            let lowercased = interfaceName.lowercased()
-            // Bỏ qua utun0 vì đây là interface hệ thống, không phải VPN người dùng
-            if lowercased == "utun0" { continue }
+        var tunnelDetected = false
+        for ptr in sequence(first: firstAddr, next: { $0.pointee.ifa_next }) {
+            let interface = ptr.pointee
             
-            if vpnPrefixes.contains(where: { lowercased.hasPrefix($0) }) {
-                isActive = true
+            // Chỉ quan tâm đến IPv4
+            guard let addr = interface.ifa_addr, addr.pointee.sa_family == sa_family_t(AF_INET) else {
+                continue
+            }
+            
+            let name = String(cString: interface.ifa_name).lowercased()
+            
+            // AirCard coi bất kỳ interface nào có tiền tố sau là tunnel
+            if name.hasPrefix("utun") || name.hasPrefix("ipsec") || name.hasPrefix("ppp") || name.hasPrefix("tun") || name.hasPrefix("tap") {
+                tunnelDetected = true
                 break
             }
         }
         
-        isTunnelActive = isActive
-        if isActive {
+        isTunnelActive = tunnelDetected
+        if tunnelDetected {
             alertMessage = "Tunnel detected. Run Airlift is now available."
             showSuccessAlert = true
         } else {
