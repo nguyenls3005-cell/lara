@@ -5,6 +5,8 @@
 
 import SwiftUI
 import UniformTypeIdentifiers
+import Network
+import SystemConfiguration
 
 struct ContentView: View {
     @EnvironmentObject private var mgr: laramgr
@@ -20,6 +22,8 @@ struct ContentView: View {
     // Trạng thái cho Airlift
     @State private var hasPairingFile = false
     @State private var isTunnelActive = false
+    @State private var showPairingImporter = false
+    @State private var pairingFileName = ""
     
     init() {
         globallogger.capture()
@@ -51,6 +55,13 @@ struct ContentView: View {
                 Button("OK", role: .cancel) { }
             } message: {
                 Text(alertMessage)
+            }
+            .fileImporter(
+                isPresented: $showPairingImporter,
+                allowedContentTypes: [.propertyList, UTType(filenameExtension: "mobiledevicepairing")!, UTType(filenameExtension: "mobilepair")!],
+                allowsMultipleSelection: false
+            ) { result in
+                handlePairingImport(result: result)
             }
         }
     }
@@ -85,7 +96,6 @@ struct ContentView: View {
                         mgr.hasOffsets = true
                         mgr.sbxready = true
                         
-                        // Tự động chuyển sang Both nếu Airlift đã chạy xong
                         if mgr.vfsready {
                             selectedmethod = .vfs
                             alertMessage = "Both Exploit activated successfully."
@@ -99,7 +109,7 @@ struct ContentView: View {
                 .disabled(mgr.sbxready || mgr.dsrunning)
             }
             
-            // 2. RUN AIRLIFT (Điều kiện: Đã chạy Bad_query + Có Pairing file + Có Tunnel)
+            // 2. RUN AIRLIFT
             LabeledContent(content: {
                 if mgr.vfsready {
                     Image(systemName: "checkmark.circle")
@@ -117,7 +127,6 @@ struct ContentView: View {
                         mgr.vfsrunning = false
                         mgr.vfsready = true
                         
-                        // Tự động chuyển sang Both nếu Bad_query đã chạy xong
                         if mgr.sbxready {
                             selectedmethod = .vfs
                             alertMessage = "Both Exploit activated successfully."
@@ -128,27 +137,24 @@ struct ContentView: View {
                         showSuccessAlert = true
                     }
                 })
-                // Nút bị xám nếu chưa chạy Bad_query, hoặc thiếu Pairing File/Tunnel
                 .disabled(!mgr.sbxready || mgr.vfsready || mgr.vfsrunning || !hasPairingFile || !isTunnelActive)
             }
             
-            // 3. ĐIỀU KIỆN TIÊN QUYẾT CHO AIRLIFT (Tự động ẩn khi đã có đủ)
+            // 3. ĐIỀU KIỆN TIÊN QUYẾT (Pairing file & Tunnel)
             if !mgr.vfsready {
                 if !hasPairingFile {
                     Button {
-                        // Giả lập import pairing file thành công
-                        hasPairingFile = true
+                        showPairingImporter = true
                     } label: {
-                        Label("Pairing file", systemImage: "doc.badge.plus")
+                        Label(pairingFileName.isEmpty ? "Import Pairing File (.plist)" : "Pairing File: \(pairingFileName)", systemImage: "doc.badge.plus")
                     }
                 }
                 
                 if !isTunnelActive {
                     Button {
-                        // Giả lập bật LocalDevVPN thành công
-                        isTunnelActive = true
+                        checkTunnelStatus()
                     } label: {
-                        Label("Tunnel (LocalDevVPN)", systemImage: "network")
+                        Label("Scan Tunnel (LocalDevVPN)", systemImage: "network")
                     }
                 }
             }
@@ -159,6 +165,10 @@ struct ContentView: View {
             if isdebugged() {
                 Text("Not available while a debugger is attached.")
             }
+        }
+        .onAppear {
+            // Tự động kiểm tra tunnel khi view xuất hiện
+            checkTunnelStatus()
         }
     }
     
@@ -203,6 +213,77 @@ struct ContentView: View {
             } header: {
                 HeaderLabel(text: "Logs", icon: "terminal")
             }
+        }
+    }
+    
+    // MARK: - Xử lý Pairing File
+    private func handlePairingImport(result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            do {
+                let data = try Data(contentsOf: url)
+                // Kiểm tra file pairing hợp lệ (plist và có chứa key cần thiết)
+                if let plist = try PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any],
+                   plist["DeviceCertificate"] != nil || plist["HostID"] != nil {
+                    hasPairingFile = true
+                    pairingFileName = url.lastPathComponent
+                    alertMessage = "Pairing file imported successfully."
+                    showSuccessAlert = true
+                } else {
+                    alertMessage = "Invalid pairing file. Please select a valid .plist file."
+                    showSuccessAlert = true
+                }
+            } catch {
+                alertMessage = "Failed to read pairing file: \(error.localizedDescription)"
+                showSuccessAlert = true
+            }
+        case .failure(let error):
+            alertMessage = "Import failed: \(error.localizedDescription)"
+            showSuccessAlert = true
+        }
+    }
+    
+    // MARK: - Quét Tunnel (Network Interface Check)
+    private func checkTunnelStatus() {
+        var ifaddr: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&ifaddr) == 0, let firstAddr = ifaddr else {
+            isTunnelActive = false
+            return
+        }
+        defer { freeifaddrs(ifaddr) }
+        
+        var isActive = false
+        for ptr in sequence(first: firstAddr, next: { $0.pointee.ifa_next }) {
+            let interface = ptr.pointee
+            let name = String(cString: interface.ifa_name)
+            // Kiểm tra các interface VPN phổ biến
+            if name.hasPrefix("utun") || name.hasPrefix("ipsec") || name.hasPrefix("ppp") || name.hasPrefix("tun") {
+                isActive = true
+                break
+            }
+        }
+        
+        // Kiểm tra thêm proxy settings để chắc chắn (AirCard style)
+        if !isActive {
+            if let proxySettings = CFNetworkCopySystemProxySettings()?.takeRetainedValue() as? [String: Any],
+               let scoped = proxySettings["__SCOPED__"] as? [String: Any] {
+                for key in scoped.keys {
+                    if key.contains("utun") || key.contains("ipsec") || key.contains("tun") {
+                        isActive = true
+                        break
+                    }
+                }
+            }
+        }
+        
+        isTunnelActive = isActive
+        if isActive {
+            alertMessage = "Tunnel detected. Run Airlift is now available."
+            showSuccessAlert = true
+        } else {
+            alertMessage = "No tunnel detected. Please ensure LocalDevVPN is running."
+            showSuccessAlert = true
         }
     }
 }
