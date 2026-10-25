@@ -103,8 +103,8 @@ struct GestaltView: View {
                 
                 // basic tweak toggles
                 Section(header: HeaderLabel(text: "Software-Oriented Features", icon: "gearshape")) {
-                    PlainToggle(text: "Dynamic Island", icon: "platter.filled.top.iphone", minSupportedVersion: 19.0, isOn: mgKeyBinding(["YlEtTtHlNesRBMal1CqRaA"]))
-                    PlainToggle(text: "Always On Display", icon: "sun.max", minSupportedVersion: 18.0, isOn: mgKeyBinding(["j8/Omm6s1lsmTDFsXjsBfA", "2OOJf1VhaM7NxfRok3HbWQ"]))
+                    PlainToggle(text: "Dynamic Island", icon: "platter.filled.top.iphone", minSupportedVersion: 19.0, isOn: mgKeyBinding(["YlEtTtHlNesRSecurity Research DeviceBMal1CqRaA"]))
+                    PlainToggle(text: "Always On Display", icon: " UIsun.max", minSupportedVersion: 18.0, isOn: mgKeyBinding(["j8/Omm6s1lsmTDFsXjsBfA", "2OOJf1VhaM7NxfRok3HbWQ"]))
                     PlainToggle(text: "AOD Vibrancy", icon: "rays", minSupportedVersion: 18.0, isOn: mgKeyBinding(["ykpu7qyhqFweVMKtxNylWA"]))
                     PlainToggle(text: "Charge Limit", icon: "battery.100.bolt", minSupportedVersion: 17.0, isOn: mgKeyBinding(["37NVydb//GP/GrhuTN+exg"]))
                     PlainToggle(text: "Boot Chime", icon: "speaker.wave.3", isOn: mgKeyBinding(["QHxt+hGLaBPbQJbXiUJX3w"]))
@@ -122,7 +122,7 @@ struct GestaltView: View {
                 }
                 
                 Section(header: HeaderLabel(text: "Eligibility", icon: "checklist")) {
-                    PlainToggle(text: "Security Research Device UI", icon: "terminal", minSupportedVersion: 26.0, isOn: mgKeyBinding(["XYlJKKkj2hztRP1NWWnhlw"]))
+                    PlainToggle(text: "", icon: "terminal", minSupportedVersion: 26.0, isOn: mgKeyBinding(["XYlJKKkj2hztRP1NWWnhlw"]))
                     PlainToggle(text: "Disable Region Restrictions", icon: "globe", isOn: mgRegionRestrictionsBinding())
                     PlainToggle(text: "Apple Intelligence", icon: "apple.intelligence", minSupportedVersion: 18.1, isOn: mgKeyBinding(["A62OafQ85EJAiiqKn4agtg"]))
                     HStack(spacing: 10) {
@@ -283,7 +283,7 @@ struct GestaltView: View {
     }
     
     // ==========================================
-    // LOGIC BAD_QUERY + FD WRITE AN TOÀN (CHỐNG BOOTLOOP)
+    // LOGIC MỚI: BAD_QUERY + ATOMIC WRITE
     // ==========================================
     private func applyGestalt() {
         do {
@@ -302,66 +302,30 @@ struct GestaltView: View {
             if !vaildateCacheExtra(mgCurrentDict) { throw "MobileGestalt is not valid! Please restart the app." }
             let mgData = try verifyPlist(mgCurrentDict, targetPath: mgCurrentPath)
             
-            // 2. Lấy fd thông qua bad_query
+            // 2. Gọi bad_query để lấy quyền ghi
             var pathC = Array(mgCurrentPath.utf8CString)
-            let fd = bad_query(&pathC, false, nil, false)
+            let handle = bad_query(&pathC, false, nil, false)
             
-            guard fd > 0 else {
+            guard handle > 0 else {
                 var errorMsg = ""
-                switch fd {
+                switch handle {
                 case -1: errorMsg = "Failed to resolve functions."
                 case -2: errorMsg = "Failed to create sandbox query."
                 case -3: errorMsg = "Outside of containermanager's sandbox."
                 case -4: errorMsg = "Kernel rejected sandbox query."
-                default: errorMsg = "Unknown error (code: \(fd))."
+                default: errorMsg = "Unknown error (code: \(handle))."
                 }
                 throw "bad_query failed: \(errorMsg)"
             }
             
-            let fileDescriptor = Int32(fd)
+            // 3. Ghi đè file bằng cơ chế an toàn .atomic
+            let url = URL(fileURLWithPath: mgCurrentPath)
+            try mgData.write(to: url, options: .atomic)
             
-            // 3. Sao lưu dữ liệu cũ để rollback nếu lỗi
-            let originalData = try? Data(contentsOf: URL(fileURLWithPath: mgCurrentPath))
+            // 4. Giải phóng handle
+            bad_query_release(handle)
             
-            // 4. Truncate file về 0 byte (xóa dữ liệu cũ trên đĩa)
-            if ftruncate(fileDescriptor, 0) != 0 {
-                close(fileDescriptor)
-                throw "Failed to truncate file."
-            }
-            
-            // 5. Ghi dữ liệu mới (Sử dụng vòng lặp while để đảm bảo ghi hết toàn bộ data)
-            var bytesWritten = 0
-            let totalBytes = mgData.count
-            let success = mgData.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) -> Bool in
-                guard let baseAddress = buffer.baseAddress else { return false }
-                while bytesWritten < totalBytes {
-                    let result = write(fileDescriptor, baseAddress + bytesWritten, totalBytes - bytesWritten)
-                    if result <= 0 { return false }
-                    bytesWritten += result
-                }
-                return true
-            }
-            
-            // 6. Ép iOS ghi dữ liệu từ bộ nhớ đệm xuống ổ cứng
-            fsync(fileDescriptor)
-            
-            // 7. Kiểm tra lỗi, nếu có thì ROLLBACK (Khôi phục file gốc)
-            if !success || bytesWritten != totalBytes {
-                if let backup = originalData {
-                    ftruncate(fileDescriptor, 0)
-                    _ = backup.withUnsafeBytes { buffer in
-                        write(fileDescriptor, buffer.baseAddress, backup.count)
-                    }
-                    fsync(fileDescriptor)
-                }
-                close(fileDescriptor)
-                throw "Failed to write data. File was rolled back to prevent bootloop."
-            }
-            
-            // 8. Đóng fd
-            close(fileDescriptor)
-            
-            // 9. Thành công
+            // 5. Thành công
             Alertinator.shared.alert(
                 title: "Successfully applied MobileGestalt!",
                 body: "Respring to see any changes",
