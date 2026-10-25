@@ -16,6 +16,11 @@ fi
 
 WORKING_LOCATION="$(pwd)"
 
+# --- THÊM ĐƯỜNG DẪN AIRLIFTFFI VÀO ĐÂY ---
+FRAMEWORK_PATH="${WORKING_LOCATION}/Frameworks"
+BRIDGING_HEADER_PATH="${WORKING_LOCATION}/lara/lara-Bridging-Header.h"
+# ------------------------------------------
+
 if [ ! -d "build" ]; then
     mkdir build
 fi
@@ -29,6 +34,9 @@ xcodebuild -project "$WORKING_LOCATION/$APPLICATION_NAME.xcodeproj" \
     -configuration Debug \
     -derivedDataPath "$WORKING_LOCATION/build/DerivedDataApp" \
     -destination 'generic/platform=iOS' \
+    FRAMEWORK_SEARCH_PATHS="${FRAMEWORK_PATH}" \
+    OTHER_LDFLAGS="-framework AirliftFFI" \
+    SWIFT_OBJC_BRIDGING_HEADER="${BRIDGING_HEADER_PATH}" \
     clean build \
     CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGN_ENTITLEMENTS="" CODE_SIGNING_ALLOWED="NO"
 
@@ -41,6 +49,9 @@ xcodebuild -project "$WORKING_LOCATION/$APPLICATION_NAME.xcodeproj" \
     -configuration Release \
     -derivedDataPath "$WORKING_LOCATION/build/DerivedDataApp" \
     -destination 'generic/platform=iOS' \
+    FRAMEWORK_SEARCH_PATHS="${FRAMEWORK_PATH}" \
+    OTHER_LDFLAGS="-framework AirliftFFI" \
+    SWIFT_OBJC_BRIDGING_HEADER="${BRIDGING_HEADER_PATH}" \
     clean build \
     CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGN_ENTITLEMENTS="" CODE_SIGNING_ALLOWED="NO"
 
