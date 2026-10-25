@@ -2,7 +2,6 @@
 set -euo pipefail
 
 CURRENT_DIR="$(pwd)"
-# Trỏ thẳng vào thư mục chứa file nhị phân của framework
 FRAMEWORK_PATH="${CURRENT_DIR}/Frameworks/AirliftFFI.xcframework/ios-arm64"
 BRIDGING_HEADER_PATH="${CURRENT_DIR}/lara/lara-Bridging-Header.h"
 HEADER_PATH="${CURRENT_DIR}/Frameworks/AirliftFFI.xcframework/ios-arm64/Headers"
@@ -13,22 +12,23 @@ mkdir -p build
 echo "Build Started!"
 echo
 
+# Bỏ xcpretty để xem lỗi chi tiết, đổi sang arm64, thêm -lc++
 xcodebuild \
   -project lara.xcodeproj \
   -scheme lara \
   -configuration Debug \
   -sdk iphoneos \
-  -arch arm64e \
+  -arch arm64 \
   FRAMEWORK_SEARCH_PATHS="${FRAMEWORK_PATH}" \
   HEADER_SEARCH_PATHS="${HEADER_PATH}" \
-  OTHER_LDFLAGS="${FRAMEWORK_PATH}/AirliftFFI -framework Security -framework SystemConfiguration -framework UIKit -framework Foundation" \
+  OTHER_LDFLAGS="-F${FRAMEWORK_PATH} -framework AirliftFFI -lc++ -framework Security -framework SystemConfiguration -framework UIKit -framework Foundation" \
   SWIFT_OBJC_BRIDGING_HEADER="${BRIDGING_HEADER_PATH}" \
   CODE_SIGNING_ALLOWED=NO \
   CODE_SIGNING_REQUIRED=NO \
   CODE_SIGN_IDENTITY="" \
   CODE_SIGN_ENTITLEMENTS="Config/lara.entitlements" \
   archive \
-  -archivePath "$PWD/build/lara.xcarchive" 2>&1 | xcpretty
+  -archivePath "$PWD/build/lara.xcarchive"
 
 APP_PATH="$PWD/build/lara.xcarchive/Products/Applications/lara.app"
 if [ ! -d "$APP_PATH" ]; then
