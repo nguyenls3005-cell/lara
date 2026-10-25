@@ -1,8 +1,3 @@
-//
-//  GestaltAccess.m
-//  lara
-//
-
 #import "GestaltAccess.h"
 #import "BadQueryBridge.h"
 #import <sys/sysctl.h>
@@ -66,16 +61,16 @@ static BOOL GestaltWriteAll(int fd, NSData *data) {
     NSOperatingSystemVersion version = NSProcessInfo.processInfo.operatingSystemVersion;
     NSString *build = self.currentOSBuild;
     return version.majorVersion == 27 && (
-        [build isEqualToString:@"24A5355q"] || // beta 1
-        [build isEqualToString:@"24A5370h"] || // beta 2
-        [build isEqualToString:@"24A5380h"] || // beta 3
-        [build isEqualToString:@"24A5380i"] || // iPadOS beta 3 v2
-        [build isEqualToString:@"24A5380l"] || // Public Beta 1
-        [build isEqualToString:@"24A5390f"]    // beta 4
+        [build isEqualToString:@"24A5355q"] ||
+        [build isEqualToString:@"24A5370h"] ||
+        [build isEqualToString:@"24A5380h"] ||
+        [build isEqualToString:@"24A5380i"] ||
+        [build isEqualToString:@"24A5380l"] ||
+        [build isEqualToString:@"24A5390f"]
     );
 }
 
-- (BOOL)connectWithError:(NSError **)error {
+- (BOOL)connectWithError:(NSError * _Nullable * _Nullable)error {
     if (!GestaltAccess.isRunningSupportedOS) {
         if (error) *error = GestaltError(0, @"GestaltAccess supports only iOS/iPadOS 27 beta 1–4.");
         return NO;
@@ -95,11 +90,11 @@ static BOOL GestaltWriteAll(int fd, NSData *data) {
     
     NSString *badQueryTarget = [kBadQueryMobileGestaltCacheDirectory stringByAppendingPathComponent:kGestaltPlistFileName];
     NSString *badQueryPlist = [kMobileGestaltCacheDirectory stringByAppendingPathComponent:kGestaltPlistFileName];
-    NSString *badQueryDetail = nil;
+    NSError *badQueryDetail = nil;
     BadQueryLease *badQueryLease = [BadQueryLease leaseForPath:badQueryTarget error:&badQueryDetail];
     
     if (!badQueryLease) {
-        if (error) *error = GestaltError(2, badQueryDetail ?: @"bad_query failed.");
+        if (error) *error = GestaltError(2, badQueryDetail.localizedDescription ?: @"bad_query failed.");
         return NO;
     }
     if (!GestaltCanOpenReadWrite(badQueryPlist)) {
@@ -115,7 +110,7 @@ static BOOL GestaltWriteAll(int fd, NSData *data) {
     return YES;
 }
 
-- (NSData *)readGestaltDataWithError:(NSError **)error {
+- (NSData *)readGestaltDataWithError:(NSError * _Nullable * _Nullable)error {
     if (![self connectWithError:error]) return nil;
     NSData *data = [NSData dataWithContentsOfFile:self.plistPath options:NSDataReadingMappedIfSafe error:error];
     if (!data) return nil;
@@ -123,7 +118,7 @@ static BOOL GestaltWriteAll(int fd, NSData *data) {
     return data;
 }
 
-- (NSDictionary *)readGestaltWithError:(NSError **)error {
+- (NSDictionary *)readGestaltWithError:(NSError * _Nullable * _Nullable)error {
     NSData *data = [self readGestaltDataWithError:error];
     if (!data) return nil;
     NSPropertyListFormat format = NSPropertyListBinaryFormat_v1_0;
@@ -136,7 +131,7 @@ static BOOL GestaltWriteAll(int fd, NSData *data) {
     return plist;
 }
 
-- (BOOL)saveGestalt:(NSDictionary *)plist error:(NSError **)error {
+- (BOOL)saveGestalt:(NSDictionary *)plist error:(NSError * _Nullable * _Nullable)error {
     if (![self connectWithError:error]) return NO;
     if (![plist isKindOfClass:NSDictionary.class]) {
         if (error) *error = GestaltError(6, @"The content to save is not a dictionary.");
@@ -167,7 +162,6 @@ static BOOL GestaltWriteAll(int fd, NSData *data) {
     int writeErrno = errno;
     
     if (!wrote) {
-        // Tự động ROLLBACK nếu ghi lỗi
         ftruncate(fd, 0);
         lseek(fd, 0, SEEK_SET);
         GestaltWriteAll(fd, original);
@@ -179,7 +173,6 @@ static BOOL GestaltWriteAll(int fd, NSData *data) {
     
     close(fd);
     
-    // Kiểm tra chéo sau khi ghi
     NSData *verification = [NSData dataWithContentsOfFile:targetPath];
     if (![verification isEqualToData:data]) {
         if (error) *error = GestaltError(11, @"Post-write verification failed.");
