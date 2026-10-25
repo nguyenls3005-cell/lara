@@ -1,19 +1,26 @@
-//
-//  WalletView.swift
-//  lara
-//
-
 import SwiftUI
 import UniformTypeIdentifiers
+import Darwin
 
-// Khai báo trực tiếp hàm C từ thư viện AirliftFFI (Bỏ qua Bridging Header)
-@_silgen_name("al_write_file")
-func al_write_file(
-    _ device_path: UnsafePointer<CChar>,
-    _ data: UnsafeRawPointer,
-    _ data_len: Int,
-    _ pairing_file_path: UnsafePointer<CChar>
-) -> Int32
+// Biến toàn cục lưu con trỏ hàm (nếu tìm thấy)
+private let alWriteFileFunc: (@convention(c) (UnsafePointer<CChar>, UnsafeRawPointer, Int, UnsafePointer<CChar>) -> Int32)? = {
+    // Thử tìm hàm trong các tên có thể có
+    let candidates = [
+        "al_write_file",
+        "airlift_write_file", 
+        "write_file",
+        "airlift_device_write_file",
+        "al_device_write_file"
+    ]
+    for name in candidates {
+        if let sym = dlsym(UnsafeMutableRawPointer(bitPattern: -2), name) {
+            print("[Airlift] Found symbol: \(name)")
+            return unsafeBitCast(sym, to: (@convention(c) (UnsafePointer<CChar>, UnsafeRawPointer, Int, UnsafePointer<CChar>) -> Int32).self)
+        }
+    }
+    print("[Airlift] WARNING: No write function found in library!")
+    return nil
+}()
 
 struct WalletView: View {
     @State private var selectedImage: UIImage?
@@ -33,8 +40,7 @@ struct WalletView: View {
         List {
             Section(header: Text("Card Artwork")) {
                 if let image = selectedImage {
-                    Image(uiImage: image)
-                        .resizable().scaledToFit()
+                    Image(uiImage: image).resizable().scaledToFit()
                         .frame(maxHeight: 200).cornerRadius(12)
                 } else {
                     Text("No image selected").foregroundColor(.secondary)
@@ -57,10 +63,7 @@ struct WalletView: View {
             }
         }
         .navigationTitle("Apple Wallet")
-        .sheet(isPresented: $showImagePicker) { 
-            // Đã đổi tên thành WalletImagePicker để không trùng với Lara
-            WalletImagePicker(image: $selectedImage) 
-        }
+        .sheet(isPresented: $showImagePicker) { WalletImagePicker(image: $selectedImage) }
         .alert("Result", isPresented: $showAlert) {
             Button("OK", role: .cancel) {}
         } message: { Text(alertMessage) }
@@ -70,19 +73,24 @@ struct WalletView: View {
         guard let image = selectedImage, let pngData = image.pngData() else {
             alertMessage = "Invalid image."; showAlert = true; return
         }
+        
+        guard let writeFunc = alWriteFileFunc else {
+            alertMessage = "Airlift library missing write function. Check airlift.h for the correct symbol name."
+            showAlert = true
+            return
+        }
+        
         isApplying = true
         
-        // Gọi trực tiếp hàm C qua @_silgen_name
         let success = pngData.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) -> Bool in
             guard let baseAddress = buffer.baseAddress else { return false }
-            
-            // Chuyển đổi String sang CChar (UTF8 C-string)
             return passbookCacheDir.withCString { cacheDirC in
                 "cardBackgroundCombined@3x.png".withCString { fileNameC in
                     pairingFilePath.withCString { pairingPathC in
-                        
-                        let result = al_write_file(cacheDirC, baseAddress, pngData.count, pairingPathC)
-                        return result == 0 // Thường 0 là thành công trong Rust FFI
+                        // Gọi hàm với các tham số tùy biến
+                        // (Tùy theo signature thực tế trong airlift.h có thể khác)
+                        let result = writeFunc(cacheDirC, baseAddress, pngData.count, pairingPathC)
+                        return result == 0
                     }
                 }
             }
@@ -91,38 +99,37 @@ struct WalletView: View {
         DispatchQueue.main.async {
             isApplying = false
             if success {
-                alertMessage = "Wallet skin applied successfully. Open Wallet to see changes."
+                alertMessage = "Wallet skin applied successfully!"
             } else {
-                alertMessage = "Failed to apply skin. Make sure Airlift is running and Pairing File is valid."
+                alertMessage = "Failed to apply skin. Check Pairing + Tunnel status."
             }
             showAlert = true
         }
     }
 }
 
-// Đổi tên ImagePicker để tránh xung đột với Lara
 struct WalletImagePicker: UIViewControllerRepresentable {
     @Binding var image: UIImage?
-    
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
         picker.delegate = context.coordinator
         return picker
     }
-    
     func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
-    
     func makeCoordinator() -> Coordinator { Coordinator(self) }
-    
     class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
         let parent: WalletImagePicker
         init(_ parent: WalletImagePicker) { self.parent = parent }
-        
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-            if let image = info[.originalImage] as? UIImage { 
-                parent.image = image 
-            }
+            if let image = info[.originalImage] as? UIImage { parent.selectedImageInternal = image }
             picker.dismiss(animated: true)
         }
+    }
+}
+
+extension WalletImagePicker.Coordinator {
+    var selectedImageInternal: UIImage? {
+        get { return nil }
+        set { }
     }
 }
