@@ -38,14 +38,14 @@ let empty: String?
 enum SantanderChown { 
 static func chown(path: String, uid: UInt32, gid: UInt32) -> Bool { 
 path.withCString { 
-apfs_own($0, uid, gid)  0 
+apfs_own($0, uid, gid) == 0
 } 
 } 
 }
 
 enum santanderfs { 
 static func clearImmutableIfPossible(atPath path: String) { 
-guard ProcessInfo.processInfo.operatingSystemVersion.majorVersion  16 else { 
+guard ProcessInfo.processInfo.operatingSystemVersion.majorVersion == 16 else {
 return 
 } 
 do { 
