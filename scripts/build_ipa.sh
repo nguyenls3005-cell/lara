@@ -2,9 +2,9 @@
 set -euo pipefail
 
 CURRENT_DIR="$(pwd)"
+# Trỏ thẳng vào thư mục chứa file nhị phân của framework
 FRAMEWORK_PATH="${CURRENT_DIR}/Frameworks/AirliftFFI.xcframework/ios-arm64"
 BRIDGING_HEADER_PATH="${CURRENT_DIR}/lara/lara-Bridging-Header.h"
-# Chỉ thẳng đường dẫn đến thư mục chứa file airlift.h
 HEADER_PATH="${CURRENT_DIR}/Frameworks/AirliftFFI.xcframework/ios-arm64/Headers"
 
 rm -rf build/
@@ -21,7 +21,7 @@ xcodebuild \
   -arch arm64e \
   FRAMEWORK_SEARCH_PATHS="${FRAMEWORK_PATH}" \
   HEADER_SEARCH_PATHS="${HEADER_PATH}" \
-  OTHER_LDFLAGS="-framework AirliftFFI" \
+  OTHER_LDFLAGS="${FRAMEWORK_PATH}/AirliftFFI -framework Security -framework SystemConfiguration -framework UIKit -framework Foundation" \
   SWIFT_OBJC_BRIDGING_HEADER="${BRIDGING_HEADER_PATH}" \
   CODE_SIGNING_ALLOWED=NO \
   CODE_SIGNING_REQUIRED=NO \
