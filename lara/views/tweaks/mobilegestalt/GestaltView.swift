@@ -2,12 +2,6 @@
 //  EditorView.swift
 //  lara
 //
-//  Created by ruter on 27.03.26.
-//
-
-// Most of the code is from Duy's SparseBox
-// thank you @jurre111 for the original implementation + all the nugget tweak implements
-// thank you @lunginspector for the rewrite + tweak additions
 
 import SwiftUI
 import Foundation
@@ -17,7 +11,6 @@ enum fileloc: String, CaseIterable {
     case footnote = "/var/containers/Shared/SystemGroup/systemgroup.com.apple.configurationprofiles/Library/ConfigurationProfiles/SharedDeviceConfiguration.plist"
     case airdrop = "/var/Managed Preferences/mobile/com.apple.sharingd.plist"
     case nanoregistry = "/var/mobile/Library/Preferences/com.apple.NanoRegistry.plist"
-
     case globalprefs = "/var/Managed Preferences/mobile/.GlobalPreferences.plist"
     case appstore = "/var/Managed Preferences/mobile/com.apple.AppStore.plist"
     case backboardd = "/var/Managed Preferences/mobile/com.apple.backboardd.plist"
@@ -36,13 +29,11 @@ struct GestaltView: View {
     let mgr: laramgr
     @State private var mgCurrentDict: NSMutableDictionary = NSMutableDictionary()
     @State private var isGestaltVaild: Bool = false
-    
     @State private var showgestaltwarn: Bool = false
     @State private var mgSubtype: Int = 0
     @State private var mgOriginalSubtype: Int = 0
     @State private var mgEnableDeviceName: Bool = false
     @State private var mgProductType: String = ""
-    
     @State private var mgShowFileSheet: Bool = false
     @State private var nuggetValues: [String: Bool] = [:]
     
@@ -55,7 +46,7 @@ struct GestaltView: View {
                     } label: {
                         Text("Apply Tweaks")
                     }
-                    .disabled(!mgr.sbxready) // Chờ Bad_query chạy thành công
+                    .disabled(!mgr.sbxready)
                     
                     Button {
                         resetnugget()
@@ -101,14 +92,12 @@ struct GestaltView: View {
                     }
                 }
                 
-                // basic tweak toggles
                 Section(header: HeaderLabel(text: "Software-Oriented Features", icon: "gearshape")) {
-                    PlainToggle(text: "Dynamic Island", icon: "platter.filled.top.iphone", minSupportedVersion: 19.0, isOn: mgKeyBinding(["YlEtTtHlNesRSecurity Research DeviceBMal1CqRaA"]))
-                    PlainToggle(text: "Always On Display", icon: " UIsun.max", minSupportedVersion: 18.0, isOn: mgKeyBinding(["j8/Omm6s1lsmTDFsXjsBfA", "2OOJf1VhaM7NxfRok3HbWQ"]))
+                    PlainToggle(text: "Dynamic Island", icon: "platter.filled.top.iphone", minSupportedVersion: 19.0, isOn: mgKeyBinding(["YlEtTtHlNesRBMal1CqRaA"]))
+                    PlainToggle(text: "Always On Display", icon: "sun.max", minSupportedVersion: 18.0, isOn: mgKeyBinding(["j8/Omm6s1lsmTDFsXjsBfA", "2OOJf1VhaM7NxfRok3HbWQ"]))
                     PlainToggle(text: "AOD Vibrancy", icon: "rays", minSupportedVersion: 18.0, isOn: mgKeyBinding(["ykpu7qyhqFweVMKtxNylWA"]))
                     PlainToggle(text: "Charge Limit", icon: "battery.100.bolt", minSupportedVersion: 17.0, isOn: mgKeyBinding(["37NVydb//GP/GrhuTN+exg"]))
                     PlainToggle(text: "Boot Chime", icon: "speaker.wave.3", isOn: mgKeyBinding(["QHxt+hGLaBPbQJbXiUJX3w"]))
-                    // ĐÃ XÓA Liquid Glass LPM
                 }
                 
                 Section(header: HeaderLabel(text: "Hardware-Oriented Features", icon: "iphone")) {
@@ -122,7 +111,7 @@ struct GestaltView: View {
                 }
                 
                 Section(header: HeaderLabel(text: "Eligibility", icon: "checklist")) {
-                    PlainToggle(text: "", icon: "terminal", minSupportedVersion: 26.0, isOn: mgKeyBinding(["XYlJKKkj2hztRP1NWWnhlw"]))
+                    PlainToggle(text: "Security Research Device UI", icon: "terminal", minSupportedVersion: 26.0, isOn: mgKeyBinding(["XYlJKKkj2hztRP1NWWnhlw"]))
                     PlainToggle(text: "Disable Region Restrictions", icon: "globe", isOn: mgRegionRestrictionsBinding())
                     PlainToggle(text: "Apple Intelligence", icon: "apple.intelligence", minSupportedVersion: 18.1, isOn: mgKeyBinding(["A62OafQ85EJAiiqKn4agtg"]))
                     HStack(spacing: 10) {
@@ -178,7 +167,6 @@ struct GestaltView: View {
                 Section(header: HeaderLabel(text: "Internal", icon: "ant")) {
                     PlainToggle(text: "Internal Storage", icon: "externaldrive", isOn: mgKeyBinding(["LBJfwOEzExRxzlAnSuI7eg"]))
                     PlainToggle(text: "Internal Features", icon: "gearshape", isOn: mgInternalStuffBinding())
-                    // ĐÃ XÓA Metal HUD in All Apps
                 }
                 
                 Section {
@@ -193,7 +181,6 @@ struct GestaltView: View {
                 } header: {
                     HeaderLabel(text: "UI Tweaks", icon: "eye")
                 }
-                // ĐÃ XÓA SpringBoard và Debug
             }
             .navigationTitle("MobileGestalt")
             .toolbar {
@@ -208,7 +195,6 @@ struct GestaltView: View {
             .onAppear {
                 loadCurrentGestalt()
                 loadnuggettweaks()
-                
                 if gestaltwarn {
                     showgestaltwarn = true
                 }
@@ -232,7 +218,16 @@ struct GestaltView: View {
             mgCurrentDict = try loadMutablePlistDictionary(from: URL(fileURLWithPath: mgCurrentPath))
             prepareGestaltData()
         } catch {
-            Alertinator.shared.alert(title: "Failed to load current MobileGestalt!", body: "\(error)")
+            // Thử đọc qua GestaltAccess nếu bị sandbox chặn
+            let access = GestaltAccess.shared()
+            var error: NSError?
+            if let data = access.readGestaltData(withError: &error),
+               let dict = try? PropertyListSerialization.propertyList(from: data, options: [.mutableContainersAndLeaves], format: nil) as? NSMutableDictionary {
+                mgCurrentDict = dict
+                prepareGestaltData()
+            } else {
+                Alertinator.shared.alert(title: "Failed to load current MobileGestalt!", body: "\(error?.localizedDescription ?? "Unknown error")")
+            }
         }
     }
     
@@ -268,7 +263,6 @@ struct GestaltView: View {
                 ?? currentArtworkDict["ArtworkDeviceProductDescription"] as? String
                 ?? machineName()
             mgDeviceName = deviceName
-            
             if mgDeviceName == "" {
                 mgDeviceName = deviceName
             }
@@ -283,11 +277,10 @@ struct GestaltView: View {
     }
     
     // ==========================================
-    // LOGIC MỚI: BAD_QUERY + ATOMIC WRITE
+    // LOGIC MỚI TỪ GESTALTEDIT (BAD_QUERY + ATOMIC WRITE)
     // ==========================================
     private func applyGestalt() {
         do {
-            // 1. Chuẩn bị dữ liệu
             let cacheExtra = mgCurrentDict["CacheExtra"] as? NSMutableDictionary ?? NSMutableDictionary()
             if !mgProductType.isEmpty {
                 cacheExtra["h9jDsbgj7xIVeIQ8S3/X3Q"] = mgProductType
@@ -300,39 +293,25 @@ struct GestaltView: View {
             }
             
             if !vaildateCacheExtra(mgCurrentDict) { throw "MobileGestalt is not valid! Please restart the app." }
-            let mgData = try verifyPlist(mgCurrentDict, targetPath: mgCurrentPath)
             
-            // 2. Gọi bad_query để lấy quyền ghi
-            var pathC = Array(mgCurrentPath.utf8CString)
-            let handle = bad_query(&pathC, false, nil, false)
+            let access = GestaltAccess.shared()
+            var error: NSError?
             
-            guard handle > 0 else {
-                var errorMsg = ""
-                switch handle {
-                case -1: errorMsg = "Failed to resolve functions."
-                case -2: errorMsg = "Failed to create sandbox query."
-                case -3: errorMsg = "Outside of containermanager's sandbox."
-                case -4: errorMsg = "Kernel rejected sandbox query."
-                default: errorMsg = "Unknown error (code: \(handle))."
-                }
-                throw "bad_query failed: \(errorMsg)"
+            guard GestaltAccess.isRunningSupportedOS() else {
+                throw "GestaltAccess only supports iOS 27 beta 1–4. Current build: \(GestaltAccess.currentOSBuild())"
             }
             
-            // 3. Ghi đè file bằng cơ chế an toàn .atomic
-            let url = URL(fileURLWithPath: mgCurrentPath)
-            try mgData.write(to: url, options: .atomic)
+            // Ghi file với cơ chế tự động sao lưu và rollback từ GestaltAccess
+            if !access.saveGestalt(mgCurrentDict as? [AnyHashable : Any], error: &error) {
+                throw "Failed to save MobileGestalt: \(error?.localizedDescription ?? "Unknown error")"
+            }
             
-            // 4. Giải phóng handle
-            bad_query_release(handle)
-            
-            // 5. Thành công
             Alertinator.shared.alert(
                 title: "Successfully applied MobileGestalt!",
                 body: "Respring to see any changes",
                 actionLabel: "Respring",
                 action: { mgr.respring() }
             )
-            
         } catch {
             Alertinator.shared.alert(title: "Failed to overwrite MobileGestalt!", body: "\(error)")
         }
@@ -345,7 +324,12 @@ struct GestaltView: View {
             
             if FileManager.default.fileExists(atPath: mgSavedURL.path) {
                 let restored = try loadMutablePlistDictionary(from: mgSavedURL)
-                _ = try verifyPlist(restored, targetPath: mgCurrentPath)
+                let access = GestaltAccess.shared()
+                var error: NSError?
+                
+                if !access.saveGestalt(restored as? [AnyHashable : Any], error: &error) {
+                    throw "Failed to restore MobileGestalt: \(error?.localizedDescription ?? "Unknown error")"
+                }
                 mgCurrentDict = restored
             } else {
                 throw "No MobileGestalt file found!"
@@ -488,7 +472,6 @@ struct GestaltView: View {
             ("BKHideAppleLogoOnLaunch", fileloc.backboardd.rawValue),
             ("SBNeverBreadcrumb", fileloc.springboard.rawValue),
             ("SBShowSupervisionTextOnLockScreen", fileloc.springboard.rawValue),
-
             ("OverrideTimeLimitEveryoneMode", fileloc.airdrop.rawValue),
             ("SBDontLockAfterCrash", fileloc.springboard.rawValue),
             ("SBDontDimOrLockOnAC", fileloc.springboard.rawValue),
@@ -501,7 +484,6 @@ struct GestaltView: View {
             ("EnableWakeGestureHaptic", fileloc.coremotion.rawValue),
             ("PlaySoundOnPaste", fileloc.pasteboard.rawValue),
             ("AnnounceAllPastes", fileloc.pasteboard.rawValue),
-
             ("MetalForceHudEnabled", fileloc.globalprefs.rawValue),
             ("iMessageDiagnosticsEnabled", fileloc.globalprefs.rawValue),
             ("IDSDiagnosticsEnabled", fileloc.globalprefs.rawValue),
@@ -514,7 +496,6 @@ struct GestaltView: View {
 
         for (key, path) in tweaks {
             let result = mgr.getplistvalue(path: path, key: key)
-
             if result.ok, let value = result.value as? Bool {
                 nuggetValues[key] = value
             } else {
@@ -523,28 +504,16 @@ struct GestaltView: View {
         }
     }
 
-    private func nuggetbinding(
-        _ key: String,
-        path: String
-    ) -> Binding<Bool> {
+    private func nuggetbinding(_ key: String, path: String) -> Binding<Bool> {
         Binding(
             get: {
                 nuggetValues[key] ?? false
             },
             set: { enabled in
                 nuggetValues[key] = enabled
-
-                let result = mgr.setplistvalue(
-                    path: path,
-                    key: (key, enabled ? true : nil),
-                    force: true
-                )
-
+                let result = mgr.setplistvalue(path: path, key: (key, enabled ? true : nil), force: true)
                 if !result.ok {
-                    Alertinator.shared.alert(
-                        title: "Failed to Apply Tweak",
-                        body: result.message
-                    )
+                    Alertinator.shared.alert(title: "Failed to Apply Tweak", body: result.message)
                 }
             }
         )
@@ -563,7 +532,6 @@ struct GestaltView: View {
             ("BKHideAppleLogoOnLaunch", fileloc.backboardd.rawValue),
             ("SBNeverBreadcrumb", fileloc.springboard.rawValue),
             ("SBShowSupervisionTextOnLockScreen", fileloc.springboard.rawValue),
-
             ("OverrideTimeLimitEveryoneMode", fileloc.airdrop.rawValue),
             ("SBDontLockAfterCrash", fileloc.springboard.rawValue),
             ("SBDontDimOrLockOnAC", fileloc.springboard.rawValue),
@@ -576,7 +544,6 @@ struct GestaltView: View {
             ("EnableWakeGestureHaptic", fileloc.coremotion.rawValue),
             ("PlaySoundOnPaste", fileloc.pasteboard.rawValue),
             ("AnnounceAllPastes", fileloc.pasteboard.rawValue),
-
             ("MetalForceHudEnabled", fileloc.globalprefs.rawValue),
             ("iMessageDiagnosticsEnabled", fileloc.globalprefs.rawValue),
             ("IDSDiagnosticsEnabled", fileloc.globalprefs.rawValue),
@@ -588,13 +555,8 @@ struct GestaltView: View {
         ]
 
         for (key, path) in tweaks {
-            _ = mgr.setplistvalue(
-                path: path,
-                key: (key, nil),
-                force: true
-            )
+            _ = mgr.setplistvalue(path: path, key: (key, nil), force: true)
         }
-
         loadnuggettweaks()
     }
 }
@@ -622,49 +584,28 @@ func verifyPlist(_ plist: Any, targetPath: String) throws -> Data {
     
     if fm.fileExists(atPath: targetPath) {
         let attrs = try fm.attributesOfItem(atPath: targetPath)
-        if let current = attrs[.size] as? NSNumber,
-           current.intValue == 0 {
-            Alertinator.shared.alert(
-                title: "Dangerous Plist State Detected",
-                body: "The current plist file is already 0 bytes. Overwriting has been aborted to prevent corruption."
-            )
+        if let current = attrs[.size] as? NSNumber, current.intValue == 0 {
+            Alertinator.shared.alert(title: "Dangerous Plist State Detected", body: "The current plist file is already 0 bytes. Overwriting has been aborted to prevent corruption.")
             throw "Current MobileGestalt file is 0 bytes."
         }
     }
     
     guard PropertyListSerialization.propertyList(plist, isValidFor: .binary) else {
-        Alertinator.shared.alert(
-            title: "Invalid Property List",
-            body: "The plist is invalid and cannot be written safely."
-        )
+        Alertinator.shared.alert(title: "Invalid Property List", body: "The plist is invalid and cannot be written safely.")
         throw "Invalid plist structure."
     }
     
-    let data = try PropertyListSerialization.data(
-        fromPropertyList: plist,
-        format: .binary,
-        options: 0
-    )
+    let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .binary, options: 0)
     
     if data.isEmpty || data.count == 0 {
-        Alertinator.shared.alert(
-            title: "Refusing Empty Plist Write",
-            body: "The generated plist would become 0 bytes after overwrite. Operation cancelled."
-        )
+        Alertinator.shared.alert(title: "Refusing Empty Plist Write", body: "The generated plist would become 0 bytes after overwrite. Operation cancelled.")
         throw "Serialized plist data is empty."
     }
     
     do {
-        _ = try PropertyListSerialization.propertyList(
-            from: data,
-            options: [],
-            format: nil
-        )
+        _ = try PropertyListSerialization.propertyList(from: data, options: [], format: nil)
     } catch {
-        Alertinator.shared.alert(
-            title: "Invalid Serialized Property List",
-            body: "The generated plist failed validation after serialization."
-        )
+        Alertinator.shared.alert(title: "Invalid Serialized Property List", body: "The generated plist failed validation after serialization.")
         throw "Serialized plist validation failed."
     }
     
