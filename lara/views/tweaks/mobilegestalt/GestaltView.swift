@@ -2,12 +2,6 @@
 //  EditorView.swift
 //  lara
 //
-//  Created by ruter on 27.03.26.
-//
-
-// Most of the code is from Duy's SparseBox
-// thank you @jurre111 for the original implementation + all the nugget tweak implements
-// thank you @lunginspector for the rewrite + tweak additions
 
 import SwiftUI
 import Foundation
@@ -98,14 +92,12 @@ struct GestaltView: View {
                     }
                 }
                 
-                // basic tweak toggles
                 Section(header: HeaderLabel(text: "Software-Oriented Features", icon: "gearshape")) {
                     PlainToggle(text: "Dynamic Island", icon: "platter.filled.top.iphone", minSupportedVersion: 19.0, isOn: mgKeyBinding(["YlEtTtHlNesRBMal1CqRaA"]))
                     PlainToggle(text: "Always On Display", icon: "sun.max", minSupportedVersion: 18.0, isOn: mgKeyBinding(["j8/Omm6s1lsmTDFsXjsBfA", "2OOJf1VhaM7NxfRok3HbWQ"]))
                     PlainToggle(text: "AOD Vibrancy", icon: "rays", minSupportedVersion: 18.0, isOn: mgKeyBinding(["ykpu7qyhqFweVMKtxNylWA"]))
                     PlainToggle(text: "Charge Limit", icon: "battery.100.bolt", minSupportedVersion: 17.0, isOn: mgKeyBinding(["37NVydb//GP/GrhuTN+exg"]))
                     PlainToggle(text: "Boot Chime", icon: "speaker.wave.3", isOn: mgKeyBinding(["QHxt+hGLaBPbQJbXiUJX3w"]))
-                    // ĐÃ XÓA Liquid Glass LPM
                 }
                 
                 Section(header: HeaderLabel(text: "Hardware-Oriented Features", icon: "iphone")) {
@@ -175,7 +167,6 @@ struct GestaltView: View {
                 Section(header: HeaderLabel(text: "Internal", icon: "ant")) {
                     PlainToggle(text: "Internal Storage", icon: "externaldrive", isOn: mgKeyBinding(["LBJfwOEzExRxzlAnSuI7eg"]))
                     PlainToggle(text: "Internal Features", icon: "gearshape", isOn: mgInternalStuffBinding())
-                    // ĐÃ XÓA Metal HUD in All Apps
                 }
                 
                 Section {
@@ -190,7 +181,6 @@ struct GestaltView: View {
                 } header: {
                     HeaderLabel(text: "UI Tweaks", icon: "eye")
                 }
-                // ĐÃ XÓA SpringBoard và Debug
             }
             .navigationTitle("MobileGestalt")
             .toolbar {
@@ -205,7 +195,6 @@ struct GestaltView: View {
             .onAppear {
                 loadCurrentGestalt()
                 loadnuggettweaks()
-                
                 if gestaltwarn {
                     showgestaltwarn = true
                 }
@@ -226,23 +215,21 @@ struct GestaltView: View {
     
     private func loadCurrentGestalt() {
         do {
-            // Thử đọc trực tiếp trước
             mgCurrentDict = try loadMutablePlistDictionary(from: URL(fileURLWithPath: mgCurrentPath))
             prepareGestaltData()
         } catch {
-            // Nếu bị sandbox chặn, dùng GestaltAccess (Objective-C)
-            let access = GestaltAccess.shared()
-            do {
-                // Swift tự động chuyển NSError** thành throws
-                let data = try access.readGestaltData()
-                if let dict = try PropertyListSerialization.propertyList(from: data, options: [.mutableContainersAndLeaves], format: nil) as? NSMutableDictionary {
-                    mgCurrentDict = dict
+            var pathC = Array(mgCurrentPath.utf8CString)
+            let handle = bad_query(&pathC, false, nil, false)
+            if handle > 0 {
+                defer { bad_query_release(handle) }
+                do {
+                    mgCurrentDict = try loadMutablePlistDictionary(from: URL(fileURLWithPath: mgCurrentPath))
                     prepareGestaltData()
-                } else {
-                    Alertinator.shared.alert(title: "Failed to load current MobileGestalt!", body: "Invalid plist format.")
+                } catch {
+                    Alertinator.shared.alert(title: "Failed to load current MobileGestalt!", body: "\(error)")
                 }
-            } catch {
-                Alertinator.shared.alert(title: "Failed to load current MobileGestalt!", body: "\(error.localizedDescription)")
+            } else {
+                Alertinator.shared.alert(title: "Failed to load current MobileGestalt!", body: "bad_query failed with code \(handle)")
             }
         }
     }
@@ -306,15 +293,22 @@ struct GestaltView: View {
             }
             
             if !vaildateCacheExtra(mgCurrentDict) { throw "MobileGestalt is not valid! Please restart the app." }
+            let mgData = try verifyPlist(mgCurrentDict, targetPath: mgCurrentPath)
             
-            let access = GestaltAccess.shared()
+            // Gọi bad_query để lấy quyền ghi
+            var pathC = Array(mgCurrentPath.utf8CString)
+            let handle = bad_query(&pathC, false, nil, false)
             
-            guard GestaltAccess.isRunningSupportedOS() else {
-                throw "GestaltAccess only supports iOS 27 beta 1–4. Current build: \(GestaltAccess.currentOSBuild())"
+            guard handle > 0 else {
+                throw "bad_query failed with code \(handle)."
             }
             
-            // Ép kiểu as! [AnyHashable : Any] và dùng try vì hàm ObjC đã được Swift chuyển thành throws
-            try access.saveGestalt(mgCurrentDict as! [AnyHashable : Any])
+            // Ghi đè file bằng cơ chế an toàn .atomic (Chống bootloop)
+            let url = URL(fileURLWithPath: mgCurrentPath)
+            try mgData.write(to: url, options: .atomic)
+            
+            // Giải phóng handle
+            bad_query_release(handle)
             
             Alertinator.shared.alert(
                 title: "Successfully applied MobileGestalt!",
@@ -334,12 +328,19 @@ struct GestaltView: View {
             
             if FileManager.default.fileExists(atPath: mgSavedURL.path) {
                 let restored = try loadMutablePlistDictionary(from: mgSavedURL)
-                let access = GestaltAccess.shared()
+                let mgData = try verifyPlist(restored, targetPath: mgCurrentPath)
                 
-                // Ép kiểu as! [AnyHashable : Any] và dùng try
-                try access.saveGestalt(restored as! [AnyHashable : Any])
+                var pathC = Array(mgCurrentPath.utf8CString)
+                let handle = bad_query(&pathC, false, nil, false)
                 
-                mgCurrentDict = restored
+                if handle > 0 {
+                    defer { bad_query_release(handle) }
+                    let url = URL(fileURLWithPath: mgCurrentPath)
+                    try mgData.write(to: url, options: .atomic)
+                    mgCurrentDict = restored
+                } else {
+                    throw "bad_query failed with code \(handle)."
+                }
             } else {
                 throw "No MobileGestalt file found!"
             }
