@@ -17,6 +17,10 @@ struct ContentView: View {
     @State private var showSuccessAlert = false
     @State private var alertMessage = "Action completed successfully."
     
+    // Trạng thái cho Airlift
+    @State private var hasPairingFile = false
+    @State private var isTunnelActive = false
+    
     init() {
         globallogger.capture()
     }
@@ -61,7 +65,7 @@ struct ContentView: View {
     
     private var KRWSection: some View {
         Section {
-            // NÚT 1: RUN BAD_QUERY
+            // 1. RUN BAD_QUERY
             LabeledContent(content: {
                 if mgr.sbxready {
                     Image(systemName: "checkmark.circle")
@@ -73,7 +77,6 @@ struct ContentView: View {
                 }
             }) {
                 Button("Run Bad_query", action: {
-                    selectedmethod = .sbx
                     mgr.dsrunning = true
                     
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
@@ -81,14 +84,22 @@ struct ContentView: View {
                         mgr.dsready = true
                         mgr.hasOffsets = true
                         mgr.sbxready = true
-                        alertMessage = "Bad_query executed successfully."
+                        
+                        // Tự động chuyển sang Both nếu Airlift đã chạy xong
+                        if mgr.vfsready {
+                            selectedmethod = .vfs
+                            alertMessage = "Both Exploit activated successfully."
+                        } else {
+                            selectedmethod = .sbx
+                            alertMessage = "Bad_query executed successfully."
+                        }
                         showSuccessAlert = true
                     }
                 })
                 .disabled(mgr.sbxready || mgr.dsrunning)
             }
             
-            // NÚT 2: RUN AIRLIFT
+            // 2. RUN AIRLIFT (Điều kiện: Đã chạy Bad_query + Có Pairing file + Có Tunnel)
             LabeledContent(content: {
                 if mgr.vfsready {
                     Image(systemName: "checkmark.circle")
@@ -100,31 +111,45 @@ struct ContentView: View {
                 }
             }) {
                 Button("Run Airlift", action: {
-                    selectedmethod = .hybrid
                     mgr.vfsrunning = true
                     
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                         mgr.vfsrunning = false
                         mgr.vfsready = true
-                        alertMessage = "Airlift executed successfully."
+                        
+                        // Tự động chuyển sang Both nếu Bad_query đã chạy xong
+                        if mgr.sbxready {
+                            selectedmethod = .vfs
+                            alertMessage = "Both Exploit activated successfully."
+                        } else {
+                            selectedmethod = .hybrid
+                            alertMessage = "Airlift executed successfully."
+                        }
                         showSuccessAlert = true
                     }
                 })
-                .disabled(mgr.vfsready || mgr.vfsrunning)
+                // Nút bị xám nếu chưa chạy Bad_query, hoặc thiếu Pairing File/Tunnel
+                .disabled(!mgr.sbxready || mgr.vfsready || mgr.vfsrunning || !hasPairingFile || !isTunnelActive)
             }
             
-            // NÚT 3: RUN BOTH (Chỉ hiện khi đã chạy cả 2)
-            if mgr.sbxready && mgr.vfsready {
-                LabeledContent(content: {
-                    if mgr.vfsready && mgr.sbxready {
-                        Image(systemName: "checkmark.circle")
+            // 3. ĐIỀU KIỆN TIÊN QUYẾT CHO AIRLIFT (Tự động ẩn khi đã có đủ)
+            if !mgr.vfsready {
+                if !hasPairingFile {
+                    Button {
+                        // Giả lập import pairing file thành công
+                        hasPairingFile = true
+                    } label: {
+                        Label("Pairing file", systemImage: "doc.badge.plus")
                     }
-                }) {
-                    Button("Run Both", action: {
-                        selectedmethod = .vfs
-                        alertMessage = "Both exploits executed successfully."
-                        showSuccessAlert = true
-                    })
+                }
+                
+                if !isTunnelActive {
+                    Button {
+                        // Giả lập bật LocalDevVPN thành công
+                        isTunnelActive = true
+                    } label: {
+                        Label("Tunnel (LocalDevVPN)", systemImage: "network")
+                    }
                 }
             }
             
