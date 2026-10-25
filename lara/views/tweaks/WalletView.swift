@@ -6,6 +6,15 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+// Khai báo trực tiếp hàm C từ thư viện AirliftFFI (Bỏ qua Bridging Header)
+@_silgen_name("al_write_file")
+func al_write_file(
+    _ device_path: UnsafePointer<CChar>,
+    _ data: UnsafeRawPointer,
+    _ data_len: Int,
+    _ pairing_file_path: UnsafePointer<CChar>
+) -> Int32
+
 struct WalletView: View {
     @State private var selectedImage: UIImage?
     @State private var showImagePicker = false
@@ -13,10 +22,8 @@ struct WalletView: View {
     @State private var showAlert = false
     @State private var alertMessage = ""
     
-    // Đường dẫn cache Passbook (chuẩn AirCard-iOS)
     private let passbookCacheDir = "/var/mobile/Library/Passes/Cards"
     
-    // File pairing đã import
     private var pairingFilePath: String {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         return docs.appendingPathComponent("airlift_pairing.plist").path
@@ -50,7 +57,10 @@ struct WalletView: View {
             }
         }
         .navigationTitle("Apple Wallet")
-        .sheet(isPresented: $showImagePicker) { ImagePicker(image: $selectedImage) }
+        .sheet(isPresented: $showImagePicker) { 
+            // Đã đổi tên thành WalletImagePicker để không trùng với Lara
+            WalletImagePicker(image: $selectedImage) 
+        }
         .alert("Result", isPresented: $showAlert) {
             Button("OK", role: .cancel) {}
         } message: { Text(alertMessage) }
@@ -62,13 +72,20 @@ struct WalletView: View {
         }
         isApplying = true
         
-        // Gọi AirliftFFI
+        // Gọi trực tiếp hàm C qua @_silgen_name
         let success = pngData.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) -> Bool in
             guard let baseAddress = buffer.baseAddress else { return false }
             
-            // Tên hàm C từ AirliftFFI (thường là al_write_file hoặc airlift_write_file)
-            // Nếu build báo lỗi "cannot find al_write_file", bạn cần mở file airlift.h trong thư mục Frameworks ra xem tên chính xác.
-            return al_write_file(passbookCacheDir, "cardBackgroundCombined@3x.png", baseAddress, Int32(pngData.count), pairingFilePath)
+            // Chuyển đổi String sang CChar (UTF8 C-string)
+            return passbookCacheDir.withCString { cacheDirC in
+                "cardBackgroundCombined@3x.png".withCString { fileNameC in
+                    pairingFilePath.withCString { pairingPathC in
+                        
+                        let result = al_write_file(cacheDirC, baseAddress, pngData.count, pairingPathC)
+                        return result == 0 // Thường 0 là thành công trong Rust FFI
+                    }
+                }
+            }
         }
         
         DispatchQueue.main.async {
@@ -79,6 +96,33 @@ struct WalletView: View {
                 alertMessage = "Failed to apply skin. Make sure Airlift is running and Pairing File is valid."
             }
             showAlert = true
+        }
+    }
+}
+
+// Đổi tên ImagePicker để tránh xung đột với Lara
+struct WalletImagePicker: UIViewControllerRepresentable {
+    @Binding var image: UIImage?
+    
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.delegate = context.coordinator
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+    
+    class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
+        let parent: WalletImagePicker
+        init(_ parent: WalletImagePicker) { self.parent = parent }
+        
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+            if let image = info[.originalImage] as? UIImage { 
+                parent.image = image 
+            }
+            picker.dismiss(animated: true)
         }
     }
 }
