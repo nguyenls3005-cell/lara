@@ -1,8 +1,3 @@
-//
-//  GestaltAccess.h
-//  lara
-//
-
 #import <Foundation/Foundation.h>
 
 NS_ASSUME_NONNULL_BEGIN
@@ -11,10 +6,10 @@ NS_ASSUME_NONNULL_BEGIN
 + (instancetype)shared;
 + (BOOL)isRunningSupportedOS;
 + (NSString *)currentOSBuild;
-- (BOOL)connectWithError:(NSError **)error;
-- (nullable NSDictionary *)readGestaltWithError:(NSError **)error;
-- (nullable NSData *)readGestaltDataWithError:(NSError **)error;
-- (BOOL)saveGestalt:(NSDictionary *)plist error:(NSError **)error;
+- (BOOL)connectWithError:(NSError * _Nullable * _Nullable)error;
+- (nullable NSDictionary *)readGestaltWithError:(NSError * _Nullable * _Nullable)error;
+- (nullable NSData *)readGestaltDataWithError:(NSError * _Nullable * _Nullable)error;
+- (BOOL)saveGestalt:(NSDictionary *)plist error:(NSError * _Nullable * _Nullable)error;
 @end
 
 NS_ASSUME_NONNULL_END
