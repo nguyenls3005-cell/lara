@@ -2,7 +2,7 @@
 set -euo pipefail
 
 CURRENT_DIR="$(pwd)"
-FRAMEWORK_PATH="${CURRENT_DIR}/Frameworks"
+FRAMEWORK_PATH="${CURRENT_DIR}/Frameworks/AirliftFFI.xcframework/ios-arm64"
 BRIDGING_HEADER_PATH="${CURRENT_DIR}/lara/lara-Bridging-Header.h"
 # Chỉ thẳng đường dẫn đến thư mục chứa file airlift.h
 HEADER_PATH="${CURRENT_DIR}/Frameworks/AirliftFFI.xcframework/ios-arm64/Headers"
