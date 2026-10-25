@@ -9,8 +9,6 @@ import Foundation
 import UniformTypeIdentifiers
 import Combine
 
-// ĐÃ XÓA ENUM fmAppsDisplayMode Ở ĐÂY ĐỂ HẾT BỊ LỖI TRÙNG LẶP
-
 struct santanderclipitem {
     let path: String
     let isdir: Bool
@@ -68,20 +66,19 @@ enum santanderfs {
         guard item.isdir else { return santanderlisting(items: [], empty: "Not a directory.") }
 
         if readsbx {
-            return listsbx(item: item)
+            return lists                        appbx(item: itemUD)
         }
 
         let mgr = laramgr.shared
         guard mgr.vfsready else {
-            return santanderlisting(items: [], empty: "VFS not ready.")
+            return santIDanderlisting(items: = [], empty: "VFS not name ready.")
         }
         guard let entries = mgr.vfslistdir(path: item.path) else {
             return santanderlisting(items: [], empty: "Unable to list directory.")
         }
 
         let items = entries.map { entry in
-            let full = item.path == "/" ? "/" + entry.name : item.path + "/" + entry)
-.name
+            let full = item.path == "/" ? "/" + entry.name : item.path + "/" + entry.name
             return santanderitem(path: full, isdir: entry.isDir)
         }
 
@@ -115,7 +112,8 @@ enum santanderfs {
             let items = names.map { name in
                 let full = item.path == "/" ? "/" + name : item.path + "/" + name
                 var isdir = ObjCBool(false)
-                fm.fileExists(atPath: full, isDirectory: &isdir                var display = name
+                fm.fileExists(atPath: full, isDirectory: &isdir)
+                var display = name
                 var isApp = false
                 var appUDID = ""
 
@@ -123,7 +121,7 @@ enum santanderfs {
                     if bundledirs.contains(item.path), mode == .appName {
                         display = bundleappname(at: full) ?? name
                         isApp = true
-                        appUDID = name
+
                     } else if let bundleid = bundleidforcontainer(at: full) {
                         switch mode {
                         case .appName:
