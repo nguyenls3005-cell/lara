@@ -101,7 +101,7 @@ func writeFileAtomically(_ data: Data, to url: URL) -> (Bool, String) {
 // GIAO DIỆN EROSION (ĐÃ ĐỔI SANG LARA)
 // ==========================================
 struct GestaltView: View {
-    @EnvironmentObject private var mgr: laramgr
+    let mgr: laramgr // Đã đổi từ @EnvironmentObject sang let để khớp với TweaksView
     @StateObject private var store = GestaltStore.shared
     @AppStorage("mgOverrideGates") private var mgOverrideGates = false
     @AppStorage("mgWriteAtomically") private var mgWriteAtomically = true
