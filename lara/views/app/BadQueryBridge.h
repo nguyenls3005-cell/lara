@@ -1,8 +1,3 @@
-//
-//  BadQueryBridge.h
-//  lara
-//
-
 #import <Foundation/Foundation.h>
 
 NS_ASSUME_NONNULL_BEGIN
@@ -11,7 +6,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy, readonly) NSString *targetPath;
 @property (nonatomic, readonly, getter=isActive) BOOL active;
 
-+ (nullable instancetype)leaseForPath:(NSString *)path error:(NSString *_Nullable *_Nullable)error;
++ (nullable instancetype)leaseForPath:(NSString *)path error:(NSError * _Nullable * _Nullable)error;
 - (void)invalidate;
 @end
 
