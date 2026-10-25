@@ -215,18 +215,22 @@ struct GestaltView: View {
     
     private func loadCurrentGestalt() {
         do {
+            // Thử đọc trực tiếp trước
             mgCurrentDict = try loadMutablePlistDictionary(from: URL(fileURLWithPath: mgCurrentPath))
             prepareGestaltData()
         } catch {
-            // Thử đọc qua GestaltAccess nếu bị sandbox chặn
+            // Nếu bị sandbox chặn, dùng GestaltAccess (Objective-C chuyển thành throws)
             let access = GestaltAccess.shared()
-            var error: NSError?
-            if let data = access.readGestaltData(withError: &error),
-               let dict = try? PropertyListSerialization.propertyList(from: data, options: [.mutableContainersAndLeaves], format: nil) as? NSMutableDictionary {
-                mgCurrentDict = dict
-                prepareGestaltData()
-            } else {
-                Alertinator.shared.alert(title: "Failed to load current MobileGestalt!", body: "\(error?.localizedDescription ?? "Unknown error")")
+            do {
+                let data = try access.readGestaltData()
+                if let dict = try PropertyListSerialization.propertyList(from: data, options: [.mutableContainersAndLeaves], format: nil) as? NSMutableDictionary {
+                    mgCurrentDict = dict
+                    prepareGestaltData()
+                } else {
+                    Alertinator.shared.alert(title: "Failed to load current MobileGestalt!", body: "Invalid plist format.")
+                }
+            } catch {
+                Alertinator.shared.alert(title: "Failed to load current MobileGestalt!", body: "\(error.localizedDescription)")
             }
         }
     }
@@ -276,9 +280,6 @@ struct GestaltView: View {
         return !cacheExtra.allKeys.isEmpty
     }
     
-    // ==========================================
-    // LOGIC MỚI TỪ GESTALTEDIT (BAD_QUERY + ATOMIC WRITE)
-    // ==========================================
     private func applyGestalt() {
         do {
             let cacheExtra = mgCurrentDict["CacheExtra"] as? NSMutableDictionary ?? NSMutableDictionary()
@@ -295,16 +296,13 @@ struct GestaltView: View {
             if !vaildateCacheExtra(mgCurrentDict) { throw "MobileGestalt is not valid! Please restart the app." }
             
             let access = GestaltAccess.shared()
-            var error: NSError?
             
             guard GestaltAccess.isRunningSupportedOS() else {
                 throw "GestaltAccess only supports iOS 27 beta 1–4. Current build: \(GestaltAccess.currentOSBuild())"
             }
             
-            // Ghi file với cơ chế tự động sao lưu và rollback từ GestaltAccess
-            if !access.saveGestalt(mgCurrentDict as? [AnyHashable : Any], error: &error) {
-                throw "Failed to save MobileGestalt: \(error?.localizedDescription ?? "Unknown error")"
-            }
+            // Gọi hàm saveGestalt của ObjC qua Swift (Dùng try thay vì &error)
+            try access.saveGestalt(mgCurrentDict as [AnyHashable : Any])
             
             Alertinator.shared.alert(
                 title: "Successfully applied MobileGestalt!",
@@ -325,11 +323,10 @@ struct GestaltView: View {
             if FileManager.default.fileExists(atPath: mgSavedURL.path) {
                 let restored = try loadMutablePlistDictionary(from: mgSavedURL)
                 let access = GestaltAccess.shared()
-                var error: NSError?
                 
-                if !access.saveGestalt(restored as? [AnyHashable : Any], error: &error) {
-                    throw "Failed to restore MobileGestalt: \(error?.localizedDescription ?? "Unknown error")"
-                }
+                // Gọi hàm saveGestalt của ObjC qua Swift (Dùng try thay vì &error)
+                try access.saveGestalt(restored as [AnyHashable : Any])
+                
                 mgCurrentDict = restored
             } else {
                 throw "No MobileGestalt file found!"
