@@ -9,14 +9,7 @@ import Foundation
 import UniformTypeIdentifiers
 import Combine
 
-// ==========================================
-// THÊM ENUM NÀY ĐỂ FIX LỖI BUILD (exit code 65)
-// ==========================================
-enum fmAppsDisplayMode: String {
-    case appName
-    case bundleID
-    case UUID
-}
+// ĐÃ XÓA ENUM fmAppsDisplayMode Ở ĐÂY ĐỂ HẾT BỊ LỖI TRÙNG LẶP
 
 struct santanderclipitem {
     let path: String
@@ -87,7 +80,8 @@ enum santanderfs {
         }
 
         let items = entries.map { entry in
-            let full = item.path == "/" ? "/" + entry.name : item.path + "/" + entry.name
+            let full = item.path == "/" ? "/" + entry.name : item.path + "/" + entry)
+.name
             return santanderitem(path: full, isdir: entry.isDir)
         }
 
@@ -121,8 +115,7 @@ enum santanderfs {
             let items = names.map { name in
                 let full = item.path == "/" ? "/" + name : item.path + "/" + name
                 var isdir = ObjCBool(false)
-                fm.fileExists(atPath: full, isDirectory: &isdir)
-                var display = name
+                fm.fileExists(atPath: full, isDirectory: &isdir                var display = name
                 var isApp = false
                 var appUDID = ""
 
