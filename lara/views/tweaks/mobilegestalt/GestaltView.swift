@@ -2,6 +2,12 @@
 //  EditorView.swift
 //  lara
 //
+//  Created by ruter on 27.03.26.
+//
+
+// Most of the code is from Duy's SparseBox
+// thank you @jurre111 for the original implementation + all the nugget tweak implements
+// thank you @lunginspector for the rewrite + tweak additions
 
 import SwiftUI
 import Foundation
@@ -92,12 +98,14 @@ struct GestaltView: View {
                     }
                 }
                 
+                // basic tweak toggles
                 Section(header: HeaderLabel(text: "Software-Oriented Features", icon: "gearshape")) {
                     PlainToggle(text: "Dynamic Island", icon: "platter.filled.top.iphone", minSupportedVersion: 19.0, isOn: mgKeyBinding(["YlEtTtHlNesRBMal1CqRaA"]))
                     PlainToggle(text: "Always On Display", icon: "sun.max", minSupportedVersion: 18.0, isOn: mgKeyBinding(["j8/Omm6s1lsmTDFsXjsBfA", "2OOJf1VhaM7NxfRok3HbWQ"]))
                     PlainToggle(text: "AOD Vibrancy", icon: "rays", minSupportedVersion: 18.0, isOn: mgKeyBinding(["ykpu7qyhqFweVMKtxNylWA"]))
                     PlainToggle(text: "Charge Limit", icon: "battery.100.bolt", minSupportedVersion: 17.0, isOn: mgKeyBinding(["37NVydb//GP/GrhuTN+exg"]))
                     PlainToggle(text: "Boot Chime", icon: "speaker.wave.3", isOn: mgKeyBinding(["QHxt+hGLaBPbQJbXiUJX3w"]))
+                    // ĐÃ XÓA Liquid Glass LPM
                 }
                 
                 Section(header: HeaderLabel(text: "Hardware-Oriented Features", icon: "iphone")) {
@@ -167,6 +175,7 @@ struct GestaltView: View {
                 Section(header: HeaderLabel(text: "Internal", icon: "ant")) {
                     PlainToggle(text: "Internal Storage", icon: "externaldrive", isOn: mgKeyBinding(["LBJfwOEzExRxzlAnSuI7eg"]))
                     PlainToggle(text: "Internal Features", icon: "gearshape", isOn: mgInternalStuffBinding())
+                    // ĐÃ XÓA Metal HUD in All Apps
                 }
                 
                 Section {
@@ -181,6 +190,7 @@ struct GestaltView: View {
                 } header: {
                     HeaderLabel(text: "UI Tweaks", icon: "eye")
                 }
+                // ĐÃ XÓA SpringBoard và Debug
             }
             .navigationTitle("MobileGestalt")
             .toolbar {
@@ -195,6 +205,7 @@ struct GestaltView: View {
             .onAppear {
                 loadCurrentGestalt()
                 loadnuggettweaks()
+                
                 if gestaltwarn {
                     showgestaltwarn = true
                 }
@@ -219,9 +230,10 @@ struct GestaltView: View {
             mgCurrentDict = try loadMutablePlistDictionary(from: URL(fileURLWithPath: mgCurrentPath))
             prepareGestaltData()
         } catch {
-            // Nếu bị sandbox chặn, dùng GestaltAccess (Objective-C chuyển thành throws)
+            // Nếu bị sandbox chặn, dùng GestaltAccess (Objective-C)
             let access = GestaltAccess.shared()
             do {
+                // Swift tự động chuyển NSError** thành throws
                 let data = try access.readGestaltData()
                 if let dict = try PropertyListSerialization.propertyList(from: data, options: [.mutableContainersAndLeaves], format: nil) as? NSMutableDictionary {
                     mgCurrentDict = dict
@@ -301,7 +313,7 @@ struct GestaltView: View {
                 throw "GestaltAccess only supports iOS 27 beta 1–4. Current build: \(GestaltAccess.currentOSBuild())"
             }
             
-            // Ép kiểu as! [AnyHashable : Any] để tương thích với hàm Objective-C
+            // Ép kiểu as! [AnyHashable : Any] và dùng try vì hàm ObjC đã được Swift chuyển thành throws
             try access.saveGestalt(mgCurrentDict as! [AnyHashable : Any])
             
             Alertinator.shared.alert(
@@ -324,7 +336,7 @@ struct GestaltView: View {
                 let restored = try loadMutablePlistDictionary(from: mgSavedURL)
                 let access = GestaltAccess.shared()
                 
-                // Ép kiểu as! [AnyHashable : Any] để tương thích với hàm Objective-C
+                // Ép kiểu as! [AnyHashable : Any] và dùng try
                 try access.saveGestalt(restored as! [AnyHashable : Any])
                 
                 mgCurrentDict = restored
