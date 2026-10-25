@@ -9,7 +9,7 @@ import Foundation
 import Darwin
 
 // ==========================================
-// KHAI BÁO BIẾN TOÀN CỤC (ĐỂ CÁC FILE KHÁC DÙNG CHUNG)
+// KHAI BÁO BIẾN TOÀN CỤC
 // ==========================================
 let mgCurrentPath = "/private/var/containers/Shared/SystemGroup/systemgroup.com.apple.mobilegestaltcache/Library/Caches/com.apple.MobileGestalt.plist"
 
@@ -21,15 +21,11 @@ func verifyPlist(_ plist: Any, targetPath: String) throws -> Data {
             throw "Current MobileGestalt file is 0 bytes."
         }
     }
-    
     guard PropertyListSerialization.propertyList(plist, isValidFor: .binary) else {
         throw "Invalid plist structure."
     }
-    
     let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .binary, options: 0)
-    if data.isEmpty {
-        throw "Serialized plist data is empty."
-    }
+    if data.isEmpty { throw "Serialized plist data is empty." }
     return data
 }
 
@@ -98,12 +94,11 @@ func writeFileAtomically(_ data: Data, to url: URL) -> (Bool, String) {
 }
 
 // ==========================================
-// GIAO DIỆN EROSION (ĐÃ ĐỔI SANG LARA)
+// GIAO DIỆN CHÍNH (LARA UI CŨ)
 // ==========================================
 struct GestaltView: View {
-    let mgr: laramgr // Đã đổi từ @EnvironmentObject sang let để khớp với TweaksView
+    let mgr: laramgr
     @StateObject private var store = GestaltStore.shared
-    @AppStorage("mgOverrideGates") private var mgOverrideGates = false
     @AppStorage("mgWriteAtomically") private var mgWriteAtomically = true
     @AppStorage("autoRespring") var autoRespring = false
     @AppStorage("hasShownSheet") private var hasShownSheet = false
@@ -115,121 +110,122 @@ struct GestaltView: View {
     @State private var mgEnableDeviceName = false
     @AppStorage("mgDeviceName") private var mgDeviceName = ""
     @AppStorage("ogMachineName") private var ogMachineName = ""
-    @AppStorage("showRegionTweak") private var showRegionTweak = false
     @State private var mgProductType = ""
     @State private var showInfoSheet = false
     @State private var idiotButtonTimerComplete = false
     
     var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    HStack {
-                        Picker("Subtype", selection: $mgSubtype) {
-                            Text("Original (\(mgOgSubtype))").tag(mgOgSubtype)
-                            Text("iPhone 14 Pro").tag(2436)
-                            Text("iPhone 14 Pro Max").tag(2796)
-                            Text("iPhone 15 Pro Max").tag(2976)
-                            if doubleSysVrs() >= 18.0 {
-                                Text("iPhone 16 Pro").tag(2622)
-                                Text("iPhone 16 Pro Max").tag(2868)
-                            }
-                            if doubleSysVrs() >= 26.0 { Text("iPhone Air").tag(2736) }
-                        }
+        List {
+            Section(header: HeaderLabel(text: "Applying", icon: "checkmark")) {
+                Button {
+                    if !hasShownSheet { showInfoSheet = true }
+                    else { mgApply() }
+                } label: {
+                    Text("Apply Tweaks")
+                }
+                .disabled(!mgr.sbxready)
+                
+                Button {
+                    mgRevert()
+                } label: {
+                    Text("Reset Tweaks")
+                }
+                .disabled(!mgr.sbxready)
+            }
+            
+            Section(header: HeaderLabel(text: "Device Artwork", icon: "paintbrush.pointed")) {
+                Picker(selection: $mgSubtype) {
+                    Text("Original (\(mgOgSubtype))").tag(mgOgSubtype)
+                    Text("iPhone 14 Pro").tag(2436)
+                    Text("iPhone 14 Pro Max").tag(2796)
+                    Text("iPhone 15 Pro Max").tag(2976)
+                    if doubleSysVrs() >= 18.0 {
+                        Text("iPhone 16 Pro").tag(2622)
+                        Text("iPhone 16 Pro Max").tag(2868)
+                    }
+                    if doubleSysVrs() >= 26.0 { Text("iPhone Air").tag(2736) }
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "iphone")
+                            .frame(width: 20, alignment: .center)
+                        Text("Subtype")
                         Spacer()
-                        Button { Alertinator.shared.alert(title: "Subtype Info", body: MGMsg.subtype) } label: {
-                            Image(systemName: "info.circle").frame(width: 24, height: 22)
-                        }.buttonStyle(.plain)
                     }
-                    Toggle("Custom Device Name", isOn: $mgEnableDeviceName)
-                    if mgEnableDeviceName { TextField("Device Name", text: $mgDeviceName) }
-                } header: {
-                    HeaderLabel(text: "Artwork", icon: "paintbrush.pointed")
                 }
                 
-                Section {
-                    PlainToggle(text: "Enable Dynamic Island", icon: "platter.filled.top.iphone", minSupportedVersion: 19.0, isOn: store.mgKeyBinding([MGKey.island]))
-                    PlainToggle(text: "Enable AOD", icon: "sun.max", minSupportedVersion: 18.0, isOn: store.mgKeyBinding([MGKey.AOD, MGKey.AOTime]))
-                    if store.isEnabled([MGKey.AOD]) {
-                        PlainToggle(text: "Enable AOD Vibrancy", icon: "rays", minSupportedVersion: 18.0, isOn: store.mgKeyBinding([MGKey.AODVibrancy]))
-                    }
-                    PlainToggle(text: "Enable Boot Chime", icon: "speaker.wave.3", isOn: store.mgKeyBinding([MGKey.bootChime]))
-                } header: {
-                    HeaderLabel(text: "Hardware Features", icon: "gearshape")
-                }
-                
-                Section {
-                    PlainToggle(text: "Enable Internal Install", icon: "terminal", infoType: .info, infoMessage: MGMsg.intInstall, isOn: store.mgKeyBinding([MGKey.intInstall]))
-                    PlainToggle(text: "Enable Internal Build", icon: "terminal", infoType: .info, infoMessage: MGMsg.intBuild, isOn: store.mgKeyBinding([MGKey.intBuild]))
-                } header: {
-                    HeaderLabel(text: "Internal", icon: "ant")
-                }
-                
-                Section {
-                    PlainToggle(text: "Enable SRD UI", icon: "terminal", minSupportedVersion: 26.0, isOn: store.mgKeyBinding([MGKey.srd]))
-                    if showRegionTweak {
-                        PlainToggle(text: "Disable Region Restrictions", icon: "globe", isOn: store.mgRegionRestrictionsBinding())
-                    }
-                    PlainToggle(text: "Enable Apple Intelligence", icon: "apple.intelligence", minSupportedVersion: 18.1, isOn: store.mgKeyBinding([MGKey.appIntell]))
-                } header: {
-                    HeaderLabel(text: "Eligibility", icon: "flag")
-                }
-                
-                Section {
-                    PlainToggle(text: "Crash Detection", icon: "car", isOn: store.mgKeyBinding([MGKey.crashDet]))
-                    PlainToggle(text: "Pulse Width Modulation", icon: "eye", minSupportedVersion: 19.0, isOn: store.mgKeyBinding([MGKey.pwm]))
-                    PlainToggle(text: "Apple Pencil", icon: "pencil", isOn: store.mgKeyBinding([MGKey.appPencil]))
-                    PlainToggle(text: "Camera Control", icon: "camera.shutter.button", minSupportedVersion: 18.0, isOn: store.mgKeyBinding([MGKey.camButton, MGKey.grapPefr]))
-                    PlainToggle(text: "Action Button", icon: "button.vertical.left.press", minSupportedVersion: 17.0, isOn: store.mgKeyBinding([MGKey.actButton]))
-                } header: {
-                    HeaderLabel(text: "Preference Bundles", icon: "gear")
-                }
-                
-                Section {
-                    PlainToggle(text: "Enable Stage Manager", icon: "squares.leading.rectangle", isOn: store.mgKeyBinding([MGKey.stageMgr]))
-                    PlainToggle(text: "Enable iPadOS UI", icon: "ipad", infoType: .warning, infoMessage: MGMsg.ipadOS, isOn: store.mgTrollPadBinding())
-                } header: {
-                    HeaderLabel(text: "iPadOS", icon: "ipad")
-                }
+                Toggle("Custom Device Name", isOn: $mgEnableDeviceName)
+                if mgEnableDeviceName { TextField("Device Name", text: $mgDeviceName) }
             }
-            .navigationTitle("MobileGestalt")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Apply", role: .destructive) {
-                        if !hasShownSheet { showInfoSheet = true }
-                        else { mgApply() }
-                    }
+            
+            Section(header: HeaderLabel(text: "Software-Oriented Features", icon: "gearshape")) {
+                PlainToggle(text: "Dynamic Island", icon: "platter.filled.top.iphone", minSupportedVersion: 19.0, isOn: store.mgKeyBinding([MGKey.island]))
+                PlainToggle(text: "Always On Display", icon: "sun.max", minSupportedVersion: 18.0, isOn: store.mgKeyBinding([MGKey.AOD, MGKey.AOTime]))
+                if store.isEnabled([MGKey.AOD]) {
+                    PlainToggle(text: "AOD Vibrancy", icon: "rays", minSupportedVersion: 18.0, isOn: store.mgKeyBinding([MGKey.AODVibrancy]))
                 }
+                PlainToggle(text: "Charge Limit", icon: "battery.100.bolt", minSupportedVersion: 17.0, isOn: store.mgKeyBinding([MGKey.chargeLim]))
+                PlainToggle(text: "Boot Chime", icon: "speaker.wave.3", isOn: store.mgKeyBinding([MGKey.bootChime]))
             }
-            .sheet(isPresented: $showInfoSheet) {
-                NavigationStack {
-                    VStack {
-                        Text("Warning").font(.title).padding()
-                        Text(MGMsg.support).padding()
-                        Button("Apply") {
-                            showInfoSheet = false
-                            hasShownSheet = true
-                            idiotButtonTimerComplete = false
-                            mgApply(isFromSheet: true)
-                        }.padding().disabled(!idiotButtonTimerComplete)
-                    }
-                    .onAppear { DispatchQueue.main.asyncAfter(deadline: .now() + 4) { idiotButtonTimerComplete = true } }
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button("Cancel") { showInfoSheet = false; idiotButtonTimerComplete = false }
-                        }
+            
+            Section(header: HeaderLabel(text: "Hardware-Oriented Features", icon: "iphone")) {
+                PlainToggle(text: "Camera Control", icon: "camera.shutter.button", minSupportedVersion: 18.0, isOn: store.mgKeyBinding([MGKey.camButton, MGKey.grapPefr]))
+                PlainToggle(text: "Action Button", icon: "button.vertical.left.press", minSupportedVersion: 17.0, isOn: store.mgKeyBinding([MGKey.actButton]))
+                PlainToggle(text: "Crash Detection", icon: "car", isOn: store.mgKeyBinding([MGKey.crashDet]))
+                if UIDevice._hasHomeButton() {
+                    PlainToggle(text: "Enable Tap to Wake", icon: "hand.tap", isOn: store.mgKeyBinding([MGKey.tapToWake]))
+                }
+                PlainToggle(text: "Pulse Width Modulation", icon: "eye", minSupportedVersion: 19.0, isOn: store.mgKeyBinding([MGKey.pwm]))
+            }
+            
+            Section(header: HeaderLabel(text: "Eligibility", icon: "checklist")) {
+                PlainToggle(text: "Security Research Device UI", icon: "terminal", minSupportedVersion: 26.0, isOn: store.mgKeyBinding([MGKey.srd]))
+                PlainToggle(text: "Disable Region Restrictions", icon: "globe", isOn: store.mgRegionRestrictionsBinding())
+                PlainToggle(text: "Apple Intelligence", icon: "apple.intelligence", minSupportedVersion: 18.1, isOn: store.mgKeyBinding([MGKey.appIntell]))
+            }
+            
+            Section(header: HeaderLabel(text: "iPadOS Features", icon: "ipad")) {
+                PlainToggle(text: "Allow Installing iPadOS Apps", icon: "plus.app", isOn: store.mgKeyBinding(["9MZ5AdH43csAUajl/dU+IQ"]))
+                PlainToggle(text: "Apple Pencil Settings", icon: "pencil", isOn: store.mgKeyBinding([MGKey.appPencil]))
+                if UIDevice.current.userInterfaceIdiom == .pad {
+                    PlainToggle(text: "Stage Manager", icon: "squares.leading.rectangle", isOn: store.mgKeyBinding([MGKey.stageMgr]))
+                }
+                PlainToggle(text: "iPadOS UI", icon: "ipad", infoType: .warning, infoMessage: MGMsg.ipadOS, isOn: store.mgTrollPadBinding())
+            }
+            
+            Section(header: HeaderLabel(text: "Internal", icon: "ant")) {
+                PlainToggle(text: "Internal Storage", icon: "externaldrive", isOn: store.mgKeyBinding([MGKey.intBuild]))
+                PlainToggle(text: "Internal Features", icon: "gearshape", isOn: store.mgKeyBinding([MGKey.intInstall]))
+            }
+        }
+        .navigationTitle("MobileGestalt")
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showInfoSheet) {
+            NavigationStack {
+                VStack {
+                    Text("Warning").font(.title).padding()
+                    Text(MGMsg.support).padding()
+                    Button("Apply") {
+                        showInfoSheet = false
+                        hasShownSheet = true
+                        idiotButtonTimerComplete = false
+                        mgApply(isFromSheet: true)
+                    }.padding().disabled(!idiotButtonTimerComplete)
+                }
+                .onAppear { DispatchQueue.main.asyncAfter(deadline: .now() + 4) { idiotButtonTimerComplete = true } }
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Cancel") { showInfoSheet = false; idiotButtonTimerComplete = false }
                     }
                 }
             }
-            .onAppear {
-                store.mgCurrentDict = mgLoadData()
-            }
+        }
+        .onAppear {
+            store.mgCurrentDict = mgLoadData()
         }
     }
     
     // ==========================================
-    // LOGIC CỦA EROSION (ĐÃ TÍCH HỢP BAD_QUERY)
+    // LOGIC APPLY & RESET
     // ==========================================
     private func mgWrite(_ data: Data) -> Bool {
         var pathC = Array(MGURL.fsGestaltURL.path.utf8CString)
@@ -251,7 +247,6 @@ struct GestaltView: View {
             let mgData = try Data(contentsOf: MGURL.fsGestaltURL)
             if !FileManager.default.fileExists(atPath: MGURL.savedGestaltURL.path) {
                 try mgData.write(to: MGURL.savedGestaltURL)
-                if let locale = Locale.current.region?.identifier { showRegionTweak = locale != "US" }
             }
             
             if let ogDict = NSDictionary(contentsOf: MGURL.savedGestaltURL),
@@ -299,6 +294,25 @@ struct GestaltView: View {
             }
         } catch {
             Alertinator.shared.alert(title: "Failed to apply!", body: "Error: \(error.localizedDescription)")
+        }
+    }
+    
+    private func mgRevert() {
+        do {
+            guard let mgDictToApply = NSMutableDictionary(contentsOf: MGURL.savedGestaltURL) else { throw "failed to get dict!" }
+            let data = try PropertyListSerialization.data(fromPropertyList: mgDictToApply, format: .binary, options: 0)
+            let res = mgWrite(data)
+            
+            if res {
+                if let dict = NSMutableDictionary(contentsOf: MGURL.savedGestaltURL) {
+                    store.mgCurrentDict = dict
+                }
+                Alertinator.shared.alert(title: "Successfully reverted!", body: MGMsg.revertComp, actionLabel: "Respring", action: { mgr.respring() })
+            } else {
+                throw "overwrite failed!"
+            }
+        } catch {
+            Alertinator.shared.alert(title: "Failed to revert!", body: "Error: \(error.localizedDescription)")
         }
     }
 }
