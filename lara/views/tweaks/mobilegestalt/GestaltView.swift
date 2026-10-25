@@ -5,6 +5,7 @@
 
 import SwiftUI
 import Foundation
+import Darwin
 
 enum fileloc: String, CaseIterable {
     case springboard = "/var/Managed Preferences/mobile/com.apple.springboard.plist"
@@ -22,6 +23,69 @@ enum fileloc: String, CaseIterable {
 
 let mgCurrentPath = "/private/var/containers/Shared/SystemGroup/systemgroup.com.apple.mobilegestaltcache/Library/Caches/com.apple.MobileGestalt.plist"
 
+// ==========================================
+// HELPER GHI FILE AN TOÀN (TỪ EROSION)
+// ==========================================
+private func readAll(_ fd: Int32) throws -> Data {
+    var res = Data()
+    var buf = [UInt8](repeating: 0, count: 64 * 1024)
+    while true {
+        let count = buf.withUnsafeMutableBytes { rawBuffer in
+            read(fd, rawBuffer.baseAddress, rawBuffer.count)
+        }
+        if count > 0 { res.append(buf, count: count); continue }
+        if count == 0 { return res }
+        if errno == EINTR { continue }
+        throw NSError(domain: "writeHelper", code: 1, userInfo: [NSLocalizedDescriptionKey: "Read failed"])
+    }
+}
+
+private func writeAll(_ fd: Int32, _ data: Data) throws {
+    guard !data.isEmpty else { return }
+    try data.withUnsafeBytes { rawBuffer in
+        guard let base = rawBuffer.baseAddress else { throw NSError(domain: "writeHelper", code: 2) }
+        var offset = 0
+        while offset < data.count {
+            let res = write(fd, base.advanced(by: offset), data.count - offset)
+            if res > 0 { offset += res; continue }
+            if res < 0 && errno == EINTR { continue }
+            throw NSError(domain: "writeHelper", code: 3)
+        }
+    }
+}
+
+// Hàm ghi file sinh tử: Truncate -> Write -> Fsync -> Verify -> Rollback nếu lỗi
+func writeFileAtomically(_ data: Data, to url: URL) -> (Bool, String) {
+    guard let og = try? Data(contentsOf: url) else {
+        return (false, "failed to get original file data!")
+    }
+    
+    let fd = url.path.withCString { open($0, O_RDWR | O_CLOEXEC | O_NOFOLLOW) }
+    guard fd >= 0 else { return (false, "Failed to open file (errno: \(errno))") }
+    defer { close(fd) }
+    
+    do {
+        guard ftruncate(fd, 0) == 0 else { return (false, "Failed to truncate (errno: \(errno))") }
+        try writeAll(fd, data)
+        guard fsync(fd) == 0 else { return (false, "Failed to fsync (errno: \(errno))") }
+        guard lseek(fd, 0, SEEK_SET) >= 0 else { return (false, "Failed to lseek") }
+        
+        let verify = try readAll(fd)
+        guard verify == data else { return (false, "Verification failed (data mismatch)") }
+    } catch {
+        // ROLLBACK
+        if ftruncate(fd, 0) == 0, lseek(fd, 0, SEEK_SET) >= 0 {
+            _ = try? writeAll(fd, og)
+            _ = fsync(fd)
+        }
+        return (false, "Write failed, rolled back: \(error.localizedDescription)")
+    }
+    return (true, "succeeded")
+}
+
+// ==========================================
+// GIAO DIỆN CHÍNH
+// ==========================================
 struct GestaltView: View {
     @AppStorage("gestaltwarn") private var gestaltwarn: Bool = true
     @AppStorage("mgDeviceName") private var mgDeviceName: String = ""
@@ -218,6 +282,7 @@ struct GestaltView: View {
             mgCurrentDict = try loadMutablePlistDictionary(from: URL(fileURLWithPath: mgCurrentPath))
             prepareGestaltData()
         } catch {
+            // Thử dùng bad_query để lấy quyền đọc nếu bị sandbox chặn
             var pathC = Array(mgCurrentPath.utf8CString)
             let handle = bad_query(&pathC, false, nil, false)
             if handle > 0 {
@@ -295,20 +360,22 @@ struct GestaltView: View {
             if !vaildateCacheExtra(mgCurrentDict) { throw "MobileGestalt is not valid! Please restart the app." }
             let mgData = try verifyPlist(mgCurrentDict, targetPath: mgCurrentPath)
             
-            // Gọi bad_query để lấy quyền ghi
+            // Lấy quyền ghi bằng bad_query
             var pathC = Array(mgCurrentPath.utf8CString)
             let handle = bad_query(&pathC, false, nil, false)
             
             guard handle > 0 else {
                 throw "bad_query failed with code \(handle)."
             }
+            defer { bad_query_release(handle) }
             
-            // Ghi đè file bằng cơ chế an toàn .atomic (Chống bootloop)
+            // Gọi hàm ghi file atomically của Erosion
             let url = URL(fileURLWithPath: mgCurrentPath)
-            try mgData.write(to: url, options: .atomic)
+            let result = writeFileAtomically(mgData, to: url)
             
-            // Giải phóng handle
-            bad_query_release(handle)
+            if !result.0 {
+                throw "Write failed: \(result.1)"
+            }
             
             Alertinator.shared.alert(
                 title: "Successfully applied MobileGestalt!",
@@ -336,7 +403,11 @@ struct GestaltView: View {
                 if handle > 0 {
                     defer { bad_query_release(handle) }
                     let url = URL(fileURLWithPath: mgCurrentPath)
-                    try mgData.write(to: url, options: .atomic)
+                    let result = writeFileAtomically(mgData, to: url)
+                    
+                    if !result.0 {
+                        throw "Restore write failed: \(result.1)"
+                    }
                     mgCurrentDict = restored
                 } else {
                     throw "bad_query failed with code \(handle)."
