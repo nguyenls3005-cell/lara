@@ -1,3 +1,8 @@
+//
+//  TweaksView.swift
+//  lara
+//
+
 import SwiftUI
 
 struct TweaksView: View {
@@ -8,13 +13,13 @@ struct TweaksView: View {
         NavigationStack {
             List {
                 Section(header: HeaderLabel(text: "SpringBoard", icon: "house")) {
-                    // Đã xóa RemoteCall Customizer, SpringBoard Customizer
+                    // Đã xóa RemoteCall Customizer và SpringBoard Customizer
                     NavigationLink("Liquid Glass", destination: LiquidGlassView())
                         .disabled(!mgr.vfsready)
                 }
                 
                 Section(header: HeaderLabel(text: "Lock Screen", icon: "lock")) {
-                    // Giữ lại Passcode Theme (Mở khóa bởi Airlift)
+                    // Giữ lại Passcode Theme (Được mở khóa bởi Airlift)
                     NavigationLink("Passcode Theme", destination: PasscodeView(mgr: mgr))
                         .disabled(!mgr.vfsready)
                 }
@@ -27,14 +32,14 @@ struct TweaksView: View {
                 
                 Section(header: HeaderLabel(text: "User Interface", icon: "eye")) {
                     // Đã xóa dirtyZero, Show Hidden Icons, Font Overwrite, SystemColor Patcher
-                    // Giữ lại MobileGestalt (Mở khóa bởi Bad_query)
+                    // Giữ lại MobileGestalt (Được mở khóa bởi Bad_query)
                     NavigationLink("MobileGestalt", destination: GestaltView(mgr: mgr))
                         .disabled(!mgr.sbxready)
                 }
                 
                 Section(header: HeaderLabel(text: "System", icon: "gear")) {
-                    // Thêm Daemons (đã xóa hết các mục cũ)
-                    NavigationLink("Daemons", destination: DaemonsView(mgr: mgr))
+                    // Đã xóa hết các mục cũ, thêm Daemons
+                    NavigationLink("Daemons", destination: DaemonsView())
                         .disabled(!mgr.dsready)
                 }
                 
@@ -44,7 +49,9 @@ struct TweaksView: View {
             .navigationTitle("Tweaks")
             .toolbar {
                 if selectedlogsdisplaymode == .toolbar {
-                    Button(action: { mgr.showLogs.toggle() }) {
+                    Button(action: {
+                        mgr.showLogs.toggle()
+                    }) {
                         Image(systemName: "terminal")
                     }
                 }
@@ -54,20 +61,17 @@ struct TweaksView: View {
 }
 
 // ==========================================
-// Giao diện Daemons (Full tính năng iOS)
+// MỤC DAEMONS MỚI (FULL TÍNH NĂNG)
 // ==========================================
 struct DaemonsView: View {
-    @ObservedObject var mgr: laramgr
-    
-    // Danh sách các daemon của iOS từ OTA đến các daemon hệ thống
     let daemons = [
         "com.apple.OTATaskingAgent",
         "com.apple.mobile.softwareupdated",
         "com.apple.softwareupdateservicesd",
         "com.apple.SoftwareUpdateNotificationManager",
         "com.apple.backgroundtaskmanagement.agent",
-        "com.apple.backboardd",
         "com.apple.SpringBoard",
+        "com.apple.backboardd",
         "com.apple.runningboardd",
         "com.apple.mediaserverd",
         "com.apple.audio.audiohald",
@@ -89,7 +93,6 @@ struct DaemonsView: View {
                         Text(daemon)
                             .font(.system(.footnote, design: .monospaced))
                         Spacer()
-                        // Toggle tắt/bật daemon
                         Toggle("", isOn: Binding(
                             get: { disabledDaemons.contains(daemon) },
                             set: { isOn in
