@@ -2,8 +2,6 @@
 //  FileSystemHelpers.swift
 //  lara
 //
-//  Created by lunginspector on 5/22/26.
-//
 
 import Foundation
 import UniformTypeIdentifiers
@@ -53,7 +51,6 @@ enum santanderfs {
         do {
             try FileManager.default.setAttributes([.immutable: false], ofItemAtPath: path)
         } catch {
-            // Some files do not expose the immutable flag to this process; keep the original operation error.
         }
     }
 
@@ -66,12 +63,13 @@ enum santanderfs {
         guard item.isdir else { return santanderlisting(items: [], empty: "Not a directory.") }
 
         if readsbx {
-            return lists                        appbx(item: itemUD)
+")
+            return listsbx(item: item)
         }
 
         let mgr = laramgr.shared
         guard mgr.vfsready else {
-            return santIDanderlisting(items: = [], empty: "VFS not name ready.")
+            return santanderlisting(items: [], empty: "VFS not ready.")
         }
         guard let entries = mgr.vfslistdir(path: item.path) else {
             return santanderlisting(items: [], empty: "Unable to list directory.")
@@ -93,8 +91,7 @@ enum santanderfs {
             return santanderlisting(items: [], empty: "Directory no longer exists.")
         }
         guard fm.isReadableFile(atPath: item.path) else {
-            return santanderlisting(items: [], empty: "Cannot list directory (missing permissions).")
-        }
+            return santanderlisting(items: [], empty: "Cannot list directory (missing permissions).        }
 
         do {
             let names = try fm.contentsOfDirectory(atPath: item.path)
@@ -121,7 +118,7 @@ enum santanderfs {
                     if bundledirs.contains(item.path), mode == .appName {
                         display = bundleappname(at: full) ?? name
                         isApp = true
-
+                        appUDID = name
                     } else if let bundleid = bundleidforcontainer(at: full) {
                         switch mode {
                         case .appName:
