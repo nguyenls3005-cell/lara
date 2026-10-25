@@ -12,7 +12,6 @@ mkdir -p build
 echo "Build Started!"
 echo
 
-# Bỏ xcpretty để xem lỗi chi tiết, đổi sang arm64, thêm -lc++
 xcodebuild \
   -project lara.xcodeproj \
   -scheme lara \
@@ -21,7 +20,7 @@ xcodebuild \
   -arch arm64 \
   FRAMEWORK_SEARCH_PATHS="${FRAMEWORK_PATH}" \
   HEADER_SEARCH_PATHS="${HEADER_PATH}" \
-  OTHER_LDFLAGS="-F${FRAMEWORK_PATH} -framework AirliftFFI -lc++ -framework Security -framework SystemConfiguration -framework UIKit -framework Foundation" \
+  OTHER_LDFLAGS="${FRAMEWORK_PATH}/AirliftFFI -framework Security -framework SystemConfiguration -framework UIKit -framework Foundation" \
   SWIFT_OBJC_BRIDGING_HEADER="${BRIDGING_HEADER_PATH}" \
   CODE_SIGNING_ALLOWED=NO \
   CODE_SIGNING_REQUIRED=NO \
