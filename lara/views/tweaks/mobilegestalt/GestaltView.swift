@@ -55,6 +55,7 @@ struct GestaltView: View {
                     } label: {
                         Text("Apply Tweaks")
                     }
+                    .disabled(!mgr.sbxready) // LOGIC BAD_QUERY
                     
                     Button {
                         resetnugget()
@@ -62,6 +63,7 @@ struct GestaltView: View {
                     } label: {
                         Text("Reset Tweaks")
                     }
+                    .disabled(!mgr.sbxready) // LOGIC BAD_QUERY
                 }
                 
                 // artwork tweaks will be added when applying mobilegestalt because there's no "toggleable" bindings.
@@ -107,7 +109,7 @@ struct GestaltView: View {
                     PlainToggle(text: "AOD Vibrancy", icon: "rays", minSupportedVersion: 18.0, isOn: mgKeyBinding(["ykpu7qyhqFweVMKtxNylWA"]))
                     PlainToggle(text: "Charge Limit", icon: "battery.100.bolt", minSupportedVersion: 17.0, isOn: mgKeyBinding(["37NVydb//GP/GrhuTN+exg"]))
                     PlainToggle(text: "Boot Chime", icon: "speaker.wave.3", isOn: mgKeyBinding(["QHxt+hGLaBPbQJbXiUJX3w"]))
-                    PlainToggle(text: "Liquid Glass LPM", icon: "app.background.dotted", minSupportedVersion: 19.0, isOn: mgKeyBinding(["SAGvsp6O6kAQ4fEfDJpC4Q"]))
+                    // ĐÃ XÓA Liquid Glass LPM
                 }
                 
                 Section(header: HeaderLabel(text: "Hardware-Oriented Features", icon: "iphone")) {
@@ -178,9 +180,10 @@ struct GestaltView: View {
                 Section(header: HeaderLabel(text: "Internal", icon: "ant")) {
                     PlainToggle(text: "Internal Storage", icon: "externaldrive", isOn: mgKeyBinding(["LBJfwOEzExRxzlAnSuI7eg"]))
                     PlainToggle(text: "Internal Features", icon: "gearshape", isOn: mgInternalStuffBinding())
-                    PlainToggle(text: "Metal HUD in All Apps", icon: "terminal", isOn: mgKeyBinding(["EqrsVvjcYDdxHBiQmGhAWw"]))
+                    // ĐÃ XÓA Metal HUD in All Apps
                 }
                 
+                // ĐÃ XÓA CÁC MỤC TRONG UI TWEAKS THEO YÊU CẦU
                 Section {
                     PlainToggle(
                         text: "Hide Dynamic Island Completely",
@@ -190,143 +193,12 @@ struct GestaltView: View {
                             path: fileloc.springboard.rawValue
                         )
                     )
-
-                    PlainToggle(
-                        text: "Authentication Debug Line",
-                        icon: "faceid",
-                        isOn: nuggetbinding(
-                            "SBShowAuthenticationEngineeringUI",
-                            path: fileloc.springboard.rawValue
-                        )
-                    )
-
-                    PlainToggle(
-                        text: "Show Build Version",
-                        icon: "number",
-                        isOn: nuggetbinding(
-                            "UIStatusBarShowBuildVersion",
-                            path: fileloc.globalprefs.rawValue
-                        )
-                    )
-
-                    PlainToggle(
-                        text: "Force RTL Layout",
-                        icon: "arrow.left",
-                        isOn: nuggetbinding(
-                            "NSForceRightToLeftWritingDirection",
-                            path: fileloc.globalprefs.rawValue
-                        )
-                    )
-
-                    PlainToggle(
-                        text: "Keyboard Character Flick",
-                        icon: "keyboard",
-                        isOn: nuggetbinding(
-                            "GesturesEnabled",
-                            path: fileloc.globalprefs.rawValue
-                        )
-                    )
-
-                    PlainToggle(
-                        text: "Disable Breadcrumbs",
-                        icon: "chevron.backward",
-                        isOn: nuggetbinding(
-                            "SBNeverBreadcrumb",
-                            path: fileloc.springboard.rawValue
-                        )
-                    )
                 } header: {
                     HeaderLabel(text: "UI Tweaks", icon: "eye")
                 }
                 
-                Section {
-                    PlainToggle(
-                        text: "Disable Lock After Respring",
-                        icon: "lock.open",
-                        isOn: nuggetbinding(
-                            "SBDontLockAfterCrash",
-                            path: fileloc.springboard.rawValue
-                        )
-                    )
-
-                    PlainToggle(
-                        text: "Disable Low Battery Alerts",
-                        icon: "battery.25",
-                        isOn: nuggetbinding(
-                            "SBHideLowPowerAlerts",
-                            path: fileloc.springboard.rawValue
-                        )
-                    )
-
-                    PlainToggle(
-                        text: "Show Dynamic Island in Screenshots",
-                        icon: "camera",
-                        isOn: nuggetbinding(
-                            "SBAlwaysShowSystemApertureInSnapshots",
-                            path: fileloc.springboard.rawValue
-                        )
-                    )
-
-                    PlainToggle(
-                        text: "Play Sound on Paste",
-                        icon: "speaker.wave.2",
-                        isOn: nuggetbinding(
-                            "PlaySoundOnPaste",
-                            path: fileloc.pasteboard.rawValue
-                        )
-                    )
-
-                    PlainToggle(
-                        text: "System Paste Notifications",
-                        icon: "doc.on.clipboard",
-                        isOn: nuggetbinding(
-                            "AnnounceAllPastes",
-                            path: fileloc.pasteboard.rawValue
-                        )
-                    )
-                } header: {
-                    HeaderLabel(text: "SpringBoard", icon: "gear")
-                }
-
-                Section {
-                    PlainToggle(
-                        text: "Metal HUD Debug",
-                        icon: "cpu",
-                        isOn: nuggetbinding(
-                            "MetalForceHudEnabled",
-                            path: fileloc.globalprefs.rawValue
-                        )
-                    )
-
-                    PlainToggle(
-                        text: "App Store Debug Gesture",
-                        icon: "hand.tap",
-                        isOn: nuggetbinding(
-                            "debugGestureEnabled",
-                            path: fileloc.appstore.rawValue
-                        )
-                    )
-
-                    PlainToggle(
-                        text: "Notes Debug Mode",
-                        icon: "note.text",
-                        isOn: nuggetbinding(
-                            "DebugModeEnabled",
-                            path: fileloc.notes.rawValue
-                        )
-                    )
-
-                    PlainToggle(
-                        text: "Show Touches",
-                        icon: "hand.point.up.left",
-                        isOn: nuggetbinding(
-                            "BKDigitizerVisualizeTouches",
-                            path: fileloc.backboardd.rawValue
-                        )
-                    )
-                } header: {
-                    HeaderLabel(text: "Debug", icon: "ladybug")
-                }
+                // ĐÃ XÓA HOÀN TOÀN SECTION SPRINGBOARD
+                // ĐÃ XÓA HOÀN TOÀN SECTION DEBUG
             }
             .navigationTitle("MobileGestalt")
             .toolbar {
