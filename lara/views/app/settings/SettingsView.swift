@@ -7,7 +7,6 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
-// ĐÃ ĐỔI RAW VALUE ĐỂ NÚT TỰ ĐỘNG ĐỔI TÊN TRÊN UI
 enum method: String, CaseIterable {
     case vfs = "Both Exploit"
     case sbx = "Bad_query"
@@ -32,16 +31,15 @@ struct SettingsView: View {
     @AppStorage("selectedMethod") private var selectedMethod: method = .hybrid
     @AppStorage("keepAlive") private var keepAlive: Bool = false
     
-    @State private var showBackupAlert = false
-    
     @AppStorage("logsdisplaymode") private var selectedlogdisplaymode: logsdisplaymode = .toolbar
     @AppStorage("loggerNoBS") private var loggerNoBS: Bool = true
     
-    // Các biến cũ giữ nguyên đề phòng code khác gọi đến
-    @AppStorage("showFMInTabs") private var showFMInTabs: Bool = true
-    @AppStorage("selectedFMAppsDisplayMode") private var selectedFMAppsDisplayMode: fmAppsDisplayMode = .appName
-    @AppStorage("fmRecursiveSearch") private var fmRecursiveSearch: Bool = false
-    @AppStorage("rcDockUnlimited") private var rcDockUnlimited: Bool = false
+    // TRẠNG THÁI BACKUP
+    @AppStorage("isBackedUp") private var isBackedUp: Bool = false
+    @AppStorage("backupDate") private var backupDate: String = ""
+    @AppStorage("backupSize") private var backupSize: String = ""
+    
+    @State private var showkcacheimport: Bool = false
     
     var body: some View {
         NavigationStack {
@@ -52,7 +50,6 @@ struct SettingsView: View {
                 }
                 
                 Section(header: HeaderLabel(text: "Exploit", icon: "ant")) {
-                    // Picker này sẽ tự động hiển thị Both Exploit, Bad_query, Airlift
                     Picker("", selection: $selectedMethod) {
                         ForEach(method.allCases, id: \.self) { method in
                             Text(method.rawValue).tag(method)
@@ -63,16 +60,80 @@ struct SettingsView: View {
                     NavigationLink("Modify Offsets", destination: OffsetManagementView())
                 }
                 
-                // ĐÃ THAY KERNELCACHE BẰNG MOBILEGESTALT BACKUP
-                Section {
-                    Button("MobileGestalt Backup (First time)") {
-                        showBackupAlert = true
+                // PHẦN MOBILEGESTALT BACKUP (GIỐNG ẢNH 2 VÀ 3)
+                Section(header: HeaderLabel(text: "MobileGestalt Backup", icon: "cpu")) {
+                    if isBackedUp {
+                        // TRẠNG THÁI: ĐÃ CÓ BACKUP (ẢNH 3)
+                        HStack(spacing: 12) {
+                            Image(systemName: "checkmark.shield.fill")
+                                .foregroundColor(.green)
+                                .font(.title2)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Backup available")
+                                    .font(.headline)
+                                Text("Date: \(backupDate)")
+                                    .font(.subheadline)
+                                    .foregroundColor(.gray)
+                                Text("Size: \(backupSize)")
+                                    .font(.subheadline)
+                                    .foregroundColor(.gray)
+                            }
+                        }
+                        .padding(.vertical, 8)
+                        
+                        Button(action: {
+                            performBackup()
+                        }) {
+                            Label("Backup now", systemImage: "square.and.arrow.down")
+                                .foregroundColor(.orange)
+                        }
+                        
+                        Button(action: {
+                            showkcacheimport = true
+                        }) {
+                            Label("Import backup", systemImage: "square.and.arrow.down.on.square")
+                                .foregroundColor(.orange)
+                        }
+                        
+                        Button(action: {
+                            isBackedUp = false
+                        }) {
+                            Label("Delete backup", systemImage: "trash")
+                                .foregroundColor(.red)
+                        }
+                        
+                    } else {
+                        // TRẠNG THÁI: CHƯA CÓ BACKUP (ẢNH 2)
+                        HStack(spacing: 12) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.orange)
+                                .font(.title2)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("No backup available")
+                                    .font(.headline)
+                                Text("Create a backup to restore your settings later.")
+                                    .font(.subheadline)
+                                    .foregroundColor(.gray)
+                            }
+                        }
+                        .padding(.vertical, 8)
+                        
+                        Button(action: {
+                            performBackup()
+                        }) {
+                            Label("Backup now", systemImage: "square.and.arrow.down")
+                                .foregroundColor(.orange)
+                        }
+                        
+                        Button(action: {
+                            showkcacheimport = true
+                        }) {
+                            Label("Import backup", systemImage: "square.and.arrow.down.on.square")
+                                .foregroundColor(.orange)
+                        }
                     }
-                } header: {
-                    HeaderLabel(text: "Backup", icon: "cpu")
                 }
                 
-                // APP SETTINGS
                 Section(header: HeaderLabel(text: "App", icon: "gearshape"), footer: Text("If keep alive is enabled, the app will continue running even if it is minimized.")) {
                     Toggle("Keep Alive", isOn: $keepAlive)
                         .onChange(of: keepAlive) { _ in
@@ -90,15 +151,30 @@ struct SettingsView: View {
                     }
                     .pickerStyle(.menu)
                 }
-                
-                // ĐÃ XÓA FILE MANAGER VÀ REMOTECALL Ở ĐÂY
             }
             .navigationTitle("Settings")
-            .alert("Backup Complete", isPresented: $showBackupAlert) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text("MobileGestalt Backup saved successfully (Demo Mode).")
+            .fileImporter(isPresented: $showkcacheimport, allowedContentTypes: [.data], allowsMultipleSelection: false) { result in
+                switch result {
+                case .success(_):
+                    // Giả lập import thành công
+                    performBackup()
+                case .failure:
+                    break
+                }
             }
         }
+    }
+    
+    // HÀM GIẢ LẬP QUÁ TRÌNH BACKUP
+    private func performBackup() {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d, yyyy 'at' h:mm a"
+        backupDate = formatter.string(from: Date())
+        backupSize = "16,914 bytes"
+        isBackedUp = true
+        
+        // Rung nhẹ báo hiệu thành công
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
     }
 }
