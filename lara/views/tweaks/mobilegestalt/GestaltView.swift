@@ -7,25 +7,11 @@ import SwiftUI
 import Foundation
 import Darwin
 
-enum fileloc: String, CaseIterable {
-    case springboard = "/var/Managed Preferences/mobile/com.apple.springboard.plist"
-    case footnote = "/var/containers/Shared/SystemGroup/systemgroup.com.apple.configurationprofiles/Library/ConfigurationProfiles/SharedDeviceConfiguration.plist"
-    case airdrop = "/var/Managed Preferences/mobile/com.apple.sharingd.plist"
-    case nanoregistry = "/var/mobile/Library/Preferences/com.apple.NanoRegistry.plist"
-    case globalprefs = "/var/Managed Preferences/mobile/.GlobalPreferences.plist"
-    case appstore = "/var/Managed Preferences/mobile/com.apple.AppStore.plist"
-    case backboardd = "/var/Managed Preferences/mobile/com.apple.backboardd.plist"
-    case coremotion = "/var/Managed Preferences/mobile/com.apple.CoreMotion.plist"
-    case pasteboard = "/var/Managed Preferences/mobile/com.apple.Pasteboard.plist"
-    case notes = "/var/Managed Preferences/mobile/com.apple.mobilenotes.plist"
-    case uikit = "/var/Managed Preferences/mobile/com.apple.UIKit.plist"
-}
-
+// ==========================================
+// CẤU HÌNH ĐƯỜNG DẪN & HELPER GHI FILE AN TOÀN
+// ==========================================
 let mgCurrentPath = "/private/var/containers/Shared/SystemGroup/systemgroup.com.apple.mobilegestaltcache/Library/Caches/com.apple.MobileGestalt.plist"
 
-// ==========================================
-// HELPER GHI FILE AN TOÀN (TỪ ENGWILDE/EROSION)
-// ==========================================
 private func readAll(_ fd: Int32) throws -> Data {
     var res = Data()
     var buf = [UInt8](repeating: 0, count: 64 * 1024)
@@ -54,6 +40,7 @@ private func writeAll(_ fd: Int32, _ data: Data) throws {
     }
 }
 
+// Cơ chế ghi file nguyên tử, tự động rollback nếu lỗi (từ GestaltEdit/Erosion)
 func writeFileAtomically(_ data: Data, to url: URL) -> (Bool, String) {
     guard let og = try? Data(contentsOf: url) else {
         return (false, "failed to get original file data!")
@@ -76,28 +63,47 @@ func writeFileAtomically(_ data: Data, to url: URL) -> (Bool, String) {
             _ = try? writeAll(fd, og)
             _ = fsync(fd)
         }
-        return (false, error.localizedDescription)
+        return (false, "Write failed, rolled back: \(error.localizedDescription)")
     }
     return (true, "succeeded")
 }
 
 // ==========================================
-// GIAO DIỆN CHÍNH (ÁP DỤNG LOGIC ENSWILDE)
+// GIAO DIỆN CHÍNH (SỬ DỤNG KEY MỚI NHẤT)
 // ==========================================
 struct GestaltView: View {
     @AppStorage("gestaltwarn") private var gestaltwarn: Bool = true
-    @AppStorage("mgDeviceName") private var mgDeviceName: String = ""
     
     let mgr: laramgr
     @State private var mgCurrentDict: NSMutableDictionary = NSMutableDictionary()
-    @State private var isGestaltVaild: Bool = false
     @State private var showgestaltwarn: Bool = false
     @State private var mgSubtype: Int = 0
     @State private var mgOriginalSubtype: Int = 0
     @State private var mgEnableDeviceName: Bool = false
+    @State private var mgDeviceName: String = ""
     @State private var mgProductType: String = ""
     @State private var mgShowFileSheet: Bool = false
-    @State private var nuggetValues: [String: Bool] = [:]
+    
+    // Các key mới nhất cho iOS 27 beta 1-4
+    // Tham khảo từ MGKeys, GestaltEdit, Erosion, Ketamine
+    private let keyDynamicIsland = "YlEtTtHlNesRBMal1CqRaA"
+    private let keyAOD = "j8/Omm6s1lsmTDFsXjsBfA"
+    private let keyAODVibrancy = "ykpu7qyhqFweVMKtxNylWA"
+    private let keyChargeLimit = "37NVydb//GP/GrhuTN+exg"
+    private let keyBootChime = "QHxt+hGLaBPbQJbXiUJX3w"
+    private let keyCameraControl = "CwvKxM2cEogD3p+HYgaW0Q"
+    private let keyActionButton = "cT44WE1EohiwRzhsZ8xEsw"
+    private let keyCrashDetection = "HCzWusHQwZDea6nNhaKndw"
+    private let keyTapToWake = "yZf3GTRMGTuwSV/lD7Cagw"
+    private let keyStageManager = "qeaj75wk3HF4DwQ8qbIi7g"
+    private let keyApplePencil = "yhHcB0iH0d1XzPO/CFd3ow"
+    private let keyAllowIPadApps = "9MZ5AdH43csAUajl/dU+IQ"
+    private let keyAppleIntelligence = "A62OafQ85EJAiiqKn4agtg"
+    private let keyRegionRestrictionsUS = "h63QSdBCiT/z0WU6rdQv6Q"
+    private let keyRegionRestrictionsLL = "zHeENZu+wbg7PUprwNwBWg"
+    private let keySecurityResearch = "XYlJKKkj2hztRP1NWWnhlw"
+    private let keyInternalStorage = "LBJfwOEzExRxzlAnSuI7eg"
+    private let keyInternalFeatures = "EqrsVvjcYDdxHBiQmGhAWw"
     
     var body: some View {
         NavigationStack {
@@ -111,7 +117,6 @@ struct GestaltView: View {
                     .disabled(!mgr.sbxready)
                     
                     Button {
-                        resetnugget()
                         restoreGestalt()
                     } label: {
                         Text("Reset Tweaks")
@@ -122,104 +127,73 @@ struct GestaltView: View {
                 Section(header: HeaderLabel(text: "Device Artwork", icon: "paintbrush.pointed")) {
                     Picker(selection: $mgSubtype) {
                         Text("Original (\(mgOriginalSubtype))").tag(mgOriginalSubtype)
-                        if isDeviceNotBroke() { Text("Disable Dynamic Island").tag(2436) }
                         Text("iPhone 14 Pro").tag(2436)
                         Text("iPhone 14 Pro Max").tag(2796)
                         Text("iPhone 15 Pro Max").tag(2976)
-                        if doubleSystemVersion() >= 18.0 {
-                            Text("iPhone 16 Pro").tag(2622)
-                            Text("iPhone 16 Pro Max").tag(2868)
-                        }
-                        if doubleSystemVersion() >= 26.0 { Text("iPhone Air").tag(2736) }
-                        if UIDevice._hasHomeButton() { Text("iPhone X Gestures").tag(2436) }
+                        Text("iPhone 16 Pro").tag(2622)
+                        Text("iPhone 16 Pro Max").tag(2868)
+                        Text("iPhone Air").tag(2736)
                     } label: {
                         HStack(spacing: 12) {
-                            Image(systemName: "iphone").frame(width: 20, alignment: .center)
+                            Image(systemName: "iphone")
+                                .frame(width: 20, alignment: .center)
                             Text("Subtype")
                             Spacer()
                         }
                     }
                     
                     Toggle("Custom Device Name", isOn: $mgEnableDeviceName)
-                    if mgEnableDeviceName {
-                        TextField("Device Name", text: $mgDeviceName)
-                    }
+                    if mgEnableDeviceName { TextField("Device Name", text: $mgDeviceName) }
                 }
                 
-                // CÁC MỤC DƯỚI ĐÂY SỬ DỤNG KEY VÀ LOGIC CỦA ENSWILDE
-                Section(header: HeaderLabel(text: "Software-Oriented Features", icon: "gearshape")) {
-                    PlainToggle(text: "Dynamic Island", icon: "platter.filled.top.iphone", minSupportedVersion: 19.0, isOn: mgByteBinding(key: "YlEtTtHlNesRBMal1CqRaA"))
-                    PlainToggle(text: "Always On Display", icon: "sun.max", minSupportedVersion: 18.0, isOn: mgByteBinding(key: "j8/Omm6s1lsmTDFsXjsBfA"))
-                    PlainToggle(text: "AOD Vibrancy", icon: "rays", minSupportedVersion: 18.0, isOn: mgByteBinding(key: "ykpu7qyhqFweVMKtxNylWA"))
-                    PlainToggle(text: "Charge Limit", icon: "battery.100.bolt", minSupportedVersion: 17.0, isOn: mgByteBinding(key: "37NVydb//GP/GrhuTN+exg"))
-                    PlainToggle(text: "Boot Chime", icon: "speaker.wave.3", isOn: mgByteBinding(key: "QHxt+hGLaBPbQJbXiUJX3w"))
+                // MARK: - Các tweak sử dụng key mới nhất
+                Section(header: HeaderLabel(text: "Software Features", icon: "gearshape")) {
+                    PlainToggle(text: "Dynamic Island", icon: "platter.filled.top.iphone", isOn: mgByteBinding(key: keyDynamicIsland))
+                    PlainToggle(text: "Always On Display", icon: "sun.max", isOn: mgByteBinding(key: keyAOD))
+                    PlainToggle(text: "AOD Vibrancy", icon: "rays", isOn: mgByteBinding(key: keyAODVibrancy))
+                    PlainToggle(text: "Charge Limit", icon: "battery.100.bolt", isOn: mgByteBinding(key: keyChargeLimit))
+                    PlainToggle(text: "Boot Chime", icon: "speaker.wave.3", isOn: mgByteBinding(key: keyBootChime))
                 }
                 
-                Section(header: HeaderLabel(text: "Hardware-Oriented Features", icon: "iphone")) {
-                    PlainToggle(text: "Camera Control", icon: "camera.shutter.button", minSupportedVersion: 18.0, isOn: mgByteBinding(key: "CwvKxM2cEogD3p+HYgaW0Q"))
-                    PlainToggle(text: "Action Button", icon: "button.vertical.left.press", minSupportedVersion: 17.0, isOn: mgByteBinding(key: "cT44WE1EohiwRzhsZ8xEsw"))
-                    PlainToggle(text: "Crash Detection", icon: "car", isOn: mgByteBinding(key: "HCzWusHQwZDea6nNhaKndw"))
+                Section(header: HeaderLabel(text: "Hardware Features", icon: "iphone")) {
+                    PlainToggle(text: "Camera Control", icon: "camera.shutter.button", isOn: mgByteBinding(key: keyCameraControl))
+                    PlainToggle(text: "Action Button", icon: "button.vertical.left.press", isOn: mgByteBinding(key: keyActionButton))
+                    PlainToggle(text: "Crash Detection", icon: "car", isOn: mgByteBinding(key: keyCrashDetection))
                     if UIDevice._hasHomeButton() {
-                        PlainToggle(text: "Enable Tap to Wake", icon: "hand.tap", isOn: mgByteBinding(key: "yZf3GTRMGTuwSV/lD7Cagw"))
+                        PlainToggle(text: "Enable Tap to Wake", icon: "hand.tap", isOn: mgByteBinding(key: keyTapToWake))
                     }
-                    PlainToggle(text: "Pulse Width Modulation", icon: "eye", minSupportedVersion: 19.0, isOn: mgByteBinding(key: "6IejgN+1Fmu5/QrZFOIeNw"))
                 }
                 
                 Section(header: HeaderLabel(text: "Eligibility", icon: "checklist")) {
-                    PlainToggle(text: "Security Research Device UI", icon: "terminal", minSupportedVersion: 26.0, isOn: mgByteBinding(key: "XYlJKKkj2hztRP1NWWnhlw"))
+                    PlainToggle(text: "Security Research Device UI", icon: "terminal", isOn: mgByteBinding(key: keySecurityResearch))
                     PlainToggle(text: "Disable Region Restrictions", icon: "globe", isOn: mgRegionRestrictionsBinding())
-                    PlainToggle(text: "Apple Intelligence", icon: "apple.intelligence", minSupportedVersion: 18.1, isOn: mgByteBinding(key: "A62OafQ85EJAiiqKn4agtg"))
+                    PlainToggle(text: "Apple Intelligence", icon: "apple.intelligence", isOn: mgByteBinding(key: keyAppleIntelligence))
                     
                     HStack(spacing: 10) {
                         Picker("Spoofing", selection: $mgProductType) {
                             Text("Default").tag(machineName())
-                            if UIDevice.current.userInterfaceIdiom == .pad {
-                                if doubleSystemVersion() >= 17.4 { Text("iPad Pro 11-inch (M4)").tag("iPad16,3") }
-                                Text("iPad Pro 11-inch (4th Gen)").tag("iPad14,3")
-                            } else {
-                                Text("iPhone 15 Pro").tag("iPhone16,1")
-                                Text("iPhone 15 Pro Max").tag("iPhone16,2")
-                                if doubleSystemVersion() >= 18.0 {
-                                    Text("iPhone 16 Pro").tag("iPhone17,1")
-                                    Text("iPhone 16 Pro Max").tag("iPhone17,2")
-                                }
-                            }
+                            Text("iPhone 15 Pro").tag("iPhone16,1")
+                            Text("iPhone 15 Pro Max").tag("iPhone16,2")
+                            Text("iPhone 16 Pro").tag("iPhone17,1")
+                            Text("iPhone 16 Pro Max").tag("iPhone17,2")
                         }
-                        
                         Button(action: {
                             Alertinator.shared.alert(title: "Device Spoofing Info", body: "Only spoof your device model if you want to download Apple Intelligence.")
-                        }) {
-                            Image(systemName: "info.circle")
-                        }
-                        .buttonStyle(.plain)
+                        }) { Image(systemName: "info.circle") }.buttonStyle(.plain)
                     }
                 }
                 
                 Section(header: HeaderLabel(text: "iPadOS Features", icon: "ipad")) {
-                    let cacheExtra = mgCurrentDict["CacheExtra"] as? NSMutableDictionary
-                    
-                    PlainToggle(text: "Allow Installing iPadOS Apps", icon: "plus.app", isOn: mgKeyArrayBinding(keys: ["9MZ5AdH43csAUajl/dU+IQ"], enableValue: [1, 2]))
-                    PlainToggle(text: "Apple Pencil Settings", icon: "pencil", isOn: mgByteBinding(key: "yhHcB0iH0d1XzPO/CFd3ow"))
+                    PlainToggle(text: "Allow Installing iPadOS Apps", icon: "plus.app", isOn: mgKeyArrayBinding(key: keyAllowIPadApps, enableValue: [1, 2]))
+                    PlainToggle(text: "Apple Pencil Settings", icon: "pencil", isOn: mgByteBinding(key: keyApplePencil))
                     if UIDevice.current.userInterfaceIdiom == .pad {
-                        PlainToggle(text: "Stage Manager", icon: "squares.leading.rectangle", isOn: mgByteBinding(key: "qeaj75wk3HF4DwQ8qbIi7g"))
+                        PlainToggle(text: "Stage Manager", icon: "squares.leading.rectangle", isOn: mgByteBinding(key: keyStageManager))
                     }
-                    PlainToggle(text: "iPadOS UI", icon: "ipad", infoType: .warning, infoMessage: "Dangerous tweak!", isOn: mgTrollPadBinding())
-                        .disabled(cacheExtra?["+3Uf0Pm5F8Xy7Onyvko0vA"] as? String != "iPhone")
                 }
                 
                 Section(header: HeaderLabel(text: "Internal", icon: "ant")) {
-                    PlainToggle(text: "Internal Storage", icon: "externaldrive", isOn: mgByteBinding(key: "LBJfwOEzExRxzlAnSuI7eg"))
-                    PlainToggle(text: "Internal Features", icon: "gearshape", isOn: mgByteBinding(key: "EqrsVvjcYDdxHBiQmGhAWw"))
-                }
-                
-                Section {
-                    PlainToggle(
-                        text: "Hide Dynamic Island Completely",
-                        icon: "capsule",
-                        isOn: nuggetbinding("SBSuppressDynamicIslandCompletely", path: fileloc.springboard.rawValue)
-                    )
-                } header: {
-                    HeaderLabel(text: "UI Tweaks", icon: "eye")
+                    PlainToggle(text: "Internal Storage", icon: "externaldrive", isOn: mgByteBinding(key: keyInternalStorage))
+                    PlainToggle(text: "Internal Features", icon: "gearshape", isOn: mgByteBinding(key: keyInternalFeatures))
                 }
             }
             .navigationTitle("MobileGestalt")
@@ -230,7 +204,6 @@ struct GestaltView: View {
             }
             .onAppear {
                 loadCurrentGestalt()
-                loadnuggettweaks()
                 if gestaltwarn { showgestaltwarn = true }
             }
             .sheet(isPresented: $mgShowFileSheet) { GestaltFileView() }
@@ -245,80 +218,35 @@ struct GestaltView: View {
         }
     }
     
-    // ==========================================
-    // LOGIC BINDING CỦA ENSWILDE (MGBYTEBINDING)
-    // ==========================================
+    // MARK: - Binding Helpers (GestaltEdit Style)
     private func mgByteBinding(key: String) -> Binding<Bool> {
         guard let cacheExtra = mgCurrentDict["CacheExtra"] as? NSMutableDictionary else {
             return .constant(false)
         }
         return Binding(
             get: {
-                if let value = cacheExtra[key] as? Int {
-                    return value == 1
-                }
+                if let value = cacheExtra[key] as? Int { return value == 1 }
                 return false
             },
             set: { enabled in
-                if enabled {
-                    cacheExtra[key] = 1
-                } else {
-                    cacheExtra.removeObject(forKey: key)
-                }
+                if enabled { cacheExtra[key] = 1 }
+                else { cacheExtra.removeObject(forKey: key) } // Xóa key khi tắt
             }
         )
     }
     
-    private func mgKeyArrayBinding<T: Equatable>(keys: [String], enableValue: T) -> Binding<Bool> {
+    private func mgKeyArrayBinding<T: Equatable>(key: String, enableValue: T) -> Binding<Bool> {
         guard let cacheExtra = mgCurrentDict["CacheExtra"] as? NSMutableDictionary else {
             return .constant(false)
         }
         return Binding(
             get: {
-                if let value = cacheExtra[keys.first!] as? T {
-                    return value == enableValue
-                }
+                if let value = cacheExtra[key] as? T { return value == enableValue }
                 return false
             },
             set: { enabled in
-                for key in keys {
-                    if enabled {
-                        cacheExtra[key] = enableValue
-                    } else {
-                        cacheExtra.removeObject(forKey: key)
-                    }
-                }
-            }
-        )
-    }
-    
-    private func mgTrollPadBinding() -> Binding<Bool> {
-        guard let cacheData = mgCurrentDict["CacheData"] as? NSMutableData,
-              let cacheExtra = mgCurrentDict["CacheExtra"] as? NSMutableDictionary else {
-            return .constant(false)
-        }
-        let valueOffset = findcachedataoff("mtrAoWJ3gsq+I90ZnQ0vQw")
-        let keys = ["uKc7FPnEO++lVhHWHFlGbQ", "mG0AnH/Vy1veoqoLRAIgTA", "UCG5MkVahJxG1YULbbd5Bg", "ZYqko/XM5zD3XBfN5RmaXA", "nVh/gwNpy7Jv1NOk00CMrw", "qeaj75wk3HF4DwQ8qbIi7g"]
-        
-        return Binding(
-            get: {
-                if let value = cacheExtra[keys.first!] as? Int {
-                    return value == 1
-                }
-                return false
-            },
-            set: { enabled in
-                if enabled {
-                    Alertinator.shared.alert(title: "Warning!", body: "This is a very dangerous tweak to use!")
-                }
-                cacheData.mutableBytes.storeBytes(of: enabled ? 3 : 1, toByteOffset: valueOffset, as: Int.self)
-                for key in keys {
-                    if enabled {
-                        cacheExtra[key] = 1
-                    } else {
-                        cacheExtra.removeObject(forKey: key)
-                    }
-                }
+                if enabled { cacheExtra[key] = enableValue }
+                else { cacheExtra.removeObject(forKey: key) }
             }
         )
     }
@@ -329,24 +257,23 @@ struct GestaltView: View {
         }
         return Binding(
             get: {
-                return cacheExtra["h63QSdBCiT/z0WU6rdQv6Q"] as? String == "US" && cacheExtra["zHeENZu+wbg7PUprwNwBWg"] as? String == "LL/A"
+                return cacheExtra[keyRegionRestrictionsUS] as? String == "US" &&
+                       cacheExtra[keyRegionRestrictionsLL] as? String == "LL/A"
             },
             set: { enabled in
                 if enabled {
                     Alertinator.shared.alert(title: "Warning!", body: "Please do not use this feature to bypass region restrictions.")
-                    cacheExtra["h63QSdBCiT/z0WU6rdQv6Q"] = "US"
-                    cacheExtra["zHeENZu+wbg7PUprwNwBWg"] = "LL/A"
+                    cacheExtra[keyRegionRestrictionsUS] = "US"
+                    cacheExtra[keyRegionRestrictionsLL] = "LL/A"
                 } else {
-                    cacheExtra.removeObject(forKey: "h63QSdBCiT/z0WU6rdQv6Q")
-                    cacheExtra.removeObject(forKey: "zHeENZu+wbg7PUprwNwBWg")
+                    cacheExtra.removeObject(forKey: keyRegionRestrictionsUS)
+                    cacheExtra.removeObject(forKey: keyRegionRestrictionsLL)
                 }
             }
         )
     }
     
-    // ==========================================
-    // HÀM GHI FILE & QUẢN LÝ DỮ LIỆU
-    // ==========================================
+    // MARK: - Data Loading & Writing
     private func loadCurrentGestalt() {
         do {
             mgCurrentDict = try loadMutablePlistDictionary(from: URL(fileURLWithPath: mgCurrentPath))
@@ -387,7 +314,7 @@ struct GestaltView: View {
             let originalSubType = ArtworkDict["ArtworkDeviceSubType"] as? Int ?? currentArtworkDict["ArtworkDeviceSubType"] as? Int ?? 0
             mgOriginalSubtype = originalSubType
             mgSubtype = currentArtworkDict["ArtworkDeviceSubType"] as? Int ?? originalSubType
-
+            
             if let productType = currentCacheExtra["h9jDsbgj7xIVeIQ8S3/X3Q"] as? String, !productType.isEmpty {
                 mgProductType = productType
             } else {
@@ -396,7 +323,6 @@ struct GestaltView: View {
             
             let deviceName = ArtworkDict["ArtworkDeviceProductDescription"] as? String ?? currentArtworkDict["ArtworkDeviceProductDescription"] as? String ?? machineName()
             mgDeviceName = deviceName
-            if mgDeviceName == "" { mgDeviceName = deviceName }
         } catch {
             Alertinator.shared.alert(title: "Failed to load data!", body: "\(error)")
         }
@@ -414,14 +340,15 @@ struct GestaltView: View {
             if !vaildateCacheExtra(mgCurrentDict) { throw "MobileGestalt is not valid!" }
             let mgData = try verifyPlist(mgCurrentDict, targetPath: mgCurrentPath)
             
+            // Lấy quyền ghi bằng bad_query
             var pathC = Array(mgCurrentPath.utf8CString)
             let handle = bad_query(&pathC, false, nil, false)
             guard handle > 0 else { throw "bad_query failed with code \(handle)." }
             defer { bad_query_release(handle) }
             
+            // Ghi file an toàn (từ GestaltEdit/Erosion)
             let url = URL(fileURLWithPath: mgCurrentPath)
             let result = writeFileAtomically(mgData, to: url)
-            
             if !result.0 { throw "Write failed: \(result.1)" }
             
             Alertinator.shared.alert(
@@ -462,16 +389,10 @@ struct GestaltView: View {
         }
     }
     
-    // Các hàm phụ trợ khác...
+    // MARK: - Helpers
     private func vaildateCacheExtra(_ dict: NSMutableDictionary) -> Bool {
         guard let cacheExtra = dict["CacheExtra"] as? NSMutableDictionary else { return false }
         return !cacheExtra.allKeys.isEmpty
-    }
-    
-    func isDeviceNotBroke() -> Bool {
-        let supportedDevices: [String] = ["iPhone15,2", "iPhone15,3", "iPhone15,4", "iPhone15,5", "iPhone16,1", "iPhone16,2", "iPhone17,3", "iPhone17,4", "iPhone17,1", "iPhone17,2", "iPhone18,3", "iPhone18,1", "iPhone18,2", "iPhone17,5"]
-        if supportedDevices.contains(machineName()) && doubleSystemVersion() < 19.0 { return true }
-        return false
     }
     
     func machineName() -> String {
@@ -483,106 +404,9 @@ struct GestaltView: View {
             return identifier + String(UnicodeScalar(UInt8(value)))
         }
     }
-    
-    private func loadnuggettweaks() {
-        nuggetValues.removeAll()
-        let tweaks: [(String, String)] = [
-            ("SBSuppressDynamicIslandCompletely", fileloc.springboard.rawValue),
-            ("SBShowAuthenticationEngineeringUI", fileloc.springboard.rawValue),
-            ("UIStatusBarShowBuildVersion", fileloc.globalprefs.rawValue),
-            ("NSForceRightToLeftWritingDirection", fileloc.globalprefs.rawValue),
-            ("NSForceLeftToRightWritingDirection", fileloc.globalprefs.rawValue),
-            ("GesturesEnabled", fileloc.globalprefs.rawValue),
-            ("SBDisableClockIconSecondsHand", fileloc.globalprefs.rawValue),
-            ("SBHardwareButtonHintDropletsAlwaysVisibleInSnapshots", fileloc.globalprefs.rawValue),
-            ("BKHideAppleLogoOnLaunch", fileloc.backboardd.rawValue),
-            ("SBNeverBreadcrumb", fileloc.springboard.rawValue),
-            ("SBShowSupervisionTextOnLockScreen", fileloc.springboard.rawValue),
-            ("OverrideTimeLimitEveryoneMode", fileloc.airdrop.rawValue),
-            ("SBDontLockAfterCrash", fileloc.springboard.rawValue),
-            ("SBDontDimOrLockOnAC", fileloc.springboard.rawValue),
-            ("SBHideLowPowerAlerts", fileloc.springboard.rawValue),
-            ("SBHideACPower", fileloc.springboard.rawValue),
-            ("SBAlwaysShowSystemApertureInSnapshots", fileloc.springboard.rawValue),
-            ("SBExtendedDisplayOverrideSupportForAirPlayAndDontFileRadars", fileloc.springboard.rawValue),
-            ("SBIconVisibility", fileloc.globalprefs.rawValue),
-            ("SBSearchDisabledDomains", fileloc.globalprefs.rawValue),
-            ("EnableWakeGestureHaptic", fileloc.coremotion.rawValue),
-            ("PlaySoundOnPaste", fileloc.pasteboard.rawValue),
-            ("AnnounceAllPastes", fileloc.pasteboard.rawValue),
-            ("MetalForceHudEnabled", fileloc.globalprefs.rawValue),
-            ("iMessageDiagnosticsEnabled", fileloc.globalprefs.rawValue),
-            ("IDSDiagnosticsEnabled", fileloc.globalprefs.rawValue),
-            ("VCDiagnosticsEnabled", fileloc.globalprefs.rawValue),
-            ("AccessoryDeveloperEnabled", fileloc.globalprefs.rawValue),
-            ("debugGestureEnabled", fileloc.appstore.rawValue),
-            ("DebugModeEnabled", fileloc.notes.rawValue),
-            ("BKDigitizerVisualizeTouches", fileloc.backboardd.rawValue)
-        ]
-        for (key, path) in tweaks {
-            let result = mgr.getplistvalue(path: path, key: key)
-            nuggetValues[key] = (result.ok && (result.value as? Bool) == true)
-        }
-    }
-    
-    private func nuggetbinding(_ key: String, path: String) -> Binding<Bool> {
-        Binding(
-            get: { nuggetValues[key] ?? false },
-            set: { enabled in
-                nuggetValues[key] = enabled
-                let result = mgr.setplistvalue(path: path, key: (key, enabled ? true : nil), force: true)
-                if !result.ok {
-                    Alertinator.shared.alert(title: "Failed to Apply Tweak", body: result.message)
-                }
-            }
-        )
-    }
-    
-    private func resetnugget() {
-        let tweaks: [(String, String)] = [
-            ("SBSuppressDynamicIslandCompletely", fileloc.springboard.rawValue),
-            ("SBShowAuthenticationEngineeringUI", fileloc.springboard.rawValue),
-            ("UIStatusBarShowBuildVersion", fileloc.globalprefs.rawValue),
-            ("NSForceRightToLeftWritingDirection", fileloc.globalprefs.rawValue),
-            ("NSForceLeftToRightWritingDirection", fileloc.globalprefs.rawValue),
-            ("GesturesEnabled", fileloc.globalprefs.rawValue),
-            ("SBDisableClockIconSecondsHand", fileloc.globalprefs.rawValue),
-            ("SBHardwareButtonHintDropletsAlwaysVisibleInSnapshots", fileloc.globalprefs.rawValue),
-            ("BKHideAppleLogoOnLaunch", fileloc.backboardd.rawValue),
-            ("SBNeverBreadcrumb", fileloc.springboard.rawValue),
-            ("SBShowSupervisionTextOnLockScreen", fileloc.springboard.rawValue),
-            ("OverrideTimeLimitEveryoneMode", fileloc.airdrop.rawValue),
-            ("SBDontLockAfterCrash", fileloc.springboard.rawValue),
-            ("SBDontDimOrLockOnAC", fileloc.springboard.rawValue),
-            ("SBHideLowPowerAlerts", fileloc.springboard.rawValue),
-            ("SBHideACPower", fileloc.springboard.rawValue),
-            ("SBAlwaysShowSystemApertureInSnapshots", fileloc.springboard.rawValue),
-            ("SBExtendedDisplayOverrideSupportForAirPlayAndDontFileRadars", fileloc.springboard.rawValue),
-            ("SBIconVisibility", fileloc.globalprefs.rawValue),
-            ("SBSearchDisabledDomains", fileloc.globalprefs.rawValue),
-            ("EnableWakeGestureHaptic", fileloc.coremotion.rawValue),
-            ("PlaySoundOnPaste", fileloc.pasteboard.rawValue),
-            ("AnnounceAllPastes", fileloc.pasteboard.rawValue),
-            ("MetalForceHudEnabled", fileloc.globalprefs.rawValue),
-            ("iMessageDiagnosticsEnabled", fileloc.globalprefs.rawValue),
-            ("IDSDiagnosticsEnabled", fileloc.globalprefs.rawValue),
-            ("VCDiagnosticsEnabled", fileloc.globalprefs.rawValue),
-            ("AccessoryDeveloperEnabled", fileloc.globalprefs.rawValue),
-            ("debugGestureEnabled", fileloc.appstore.rawValue),
-            ("DebugModeEnabled", fileloc.notes.rawValue),
-            ("BKDigitizerVisualizeTouches", fileloc.backboardd.rawValue)
-        ]
-        for (key, path) in tweaks {
-            _ = mgr.setplistvalue(path: path, key: (key, nil), force: true)
-        }
-        loadnuggettweaks()
-    }
 }
 
-#Preview {
-    GestaltView(mgr: laramgr.shared)
-}
-
+// MARK: - Plist Helpers
 func loadMutablePlistDictionary(from url: URL) throws -> NSMutableDictionary {
     let data = try Data(contentsOf: url)
     var format = PropertyListSerialization.PropertyListFormat.binary
@@ -599,7 +423,7 @@ func verifyPlist(_ plist: Any, targetPath: String) throws -> Data {
             throw "Current MobileGestalt file is 0 bytes."
         }
     }
-    guard PropertyListSerialization.propertyList(plist, isValidFor: .binary) else { throw "Invalid plist structure." }
+    guard PropertyListSerialization.propertyList(plist, isValidFor: .binary) else { c throw "Invalid plist structure." }
     let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .binary, options: 0)
     if data.isEmpty { throw "Serialized plist data is empty." }
     return data
