@@ -1,8 +1,3 @@
-//
-//  BadQueryBridge.m
-//  lara
-//
-
 #import "BadQueryBridge.h"
 #import <dlfcn.h>
 #import <xpc/xpc.h>
@@ -64,7 +59,7 @@ static BadQueryAPI *BadQuerySharedAPI(void) {
 
 BOOL BadQueryBridgeAvailable(void) {
     BadQueryAPI *api = BadQuerySharedAPI();
-    return api->library && api->create && api->setClass && api->setGroupIdentifiers &&
+    return api->library != NULL && api->create && api->setClass && api->setGroupIdentifiers &&
            api->setFlags && api->setPart && api->setPartDomain && api->getSingleResult &&
            api->freeQuery && api->copySandboxToken && api->consumeSandboxExtension &&
            api->releaseSandboxExtension;
@@ -74,20 +69,27 @@ BOOL BadQueryBridgeAvailable(void) {
     int64_t _sandboxHandle;
 }
 
-+ (instancetype)leaseForPath:(NSString *)path error:(NSString **)error {
-    if (!path.isAbsolutePath) { if (error) *error = @"bad_query requires an absolute target path"; return nil; }
-    if (!BadQueryBridgeAvailable()) { if (error) *error = @"bad_query ContainerManager API unavailable"; return nil; }
++ (nullable instancetype)leaseForPath:(NSString *)path error:(NSError * _Nullable * _Nullable)error {
+    if (!path.isAbsolutePath) {
+        if (error) *error = [NSError errorWithDomain:@"badquery" code:1 userInfo:@{NSLocalizedDescriptionKey: @"bad_query requires an absolute target path"}];
+        return nil;
+    }
+    if (!BadQueryBridgeAvailable()) {
+        if (error) *error = [NSError errorWithDomain:@"badquery" code:2 userInfo:@{NSLocalizedDescriptionKey: @"bad_query ContainerManager API unavailable"}];
+        return nil;
+    }
     
     BadQueryAPI *api = BadQuerySharedAPI();
     void *query = api->create();
-    if (!query) { if (error) *error = @"bad_query could not create a container query"; return nil; }
+    if (!query) {
+        if (error) *error = [NSError errorWithDomain:@"badquery" code:3 userInfo:@{NSLocalizedDescriptionKey: @"bad_query could not create a container query"}];
+        return nil;
+    }
     
     api->setClass(query, kBadQueryContainerClass);
     xpc_object_t identifier = xpc_string_create(kBadQueryIdentifier.UTF8String);
     api->setGroupIdentifiers(query, identifier);
-#if !OS_OBJECT_USE_OBJC
-    xpc_release(identifier);
-#endif
+    
     api->setPart(query, kBadQueryPart);
     
     NSString *partDomain = [kBadQueryTraversalPrefix stringByAppendingString:path];
@@ -95,16 +97,27 @@ BOOL BadQueryBridgeAvailable(void) {
     api->setFlags(query, kBadQueryFlags);
     
     void *result = api->getSingleResult(query);
-    if (!result) { api->freeQuery(query); if (error) *error = @"bad_query was rejected by ContainerManager"; return nil; }
+    if (!result) {
+        api->freeQuery(query);
+        if (error) *error = [NSError errorWithDomain:@"badquery" code:4 userInfo:@{NSLocalizedDescriptionKey: @"bad_query was rejected by ContainerManager"}];
+        return nil;
+    }
     
     char *token = api->copySandboxToken(result);
-    if (!token) { api->freeQuery(query); if (error) *error = @"bad_query did not receive a sandbox token"; return nil; }
+    if (!token) {
+        api->freeQuery(query);
+        if (error) *error = [NSError errorWithDomain:@"badquery" code:5 userInfo:@{NSLocalizedDescriptionKey: @"bad_query did not receive a sandbox token"}];
+        return nil;
+    }
     
     int64_t handle = api->consumeSandboxExtension(token);
     free(token);
     api->freeQuery(query);
     
-    if (handle < 0) { if (error) *error = @"bad_query could not consume the sandbox token"; return nil; }
+    if (handle < 0) {
+        if (error) *error = [NSError errorWithDomain:@"badquery" code:6 userInfo:@{NSLocalizedDescriptionKey: @"bad_query could not consume the sandbox token"}];
+        return nil;
+    }
     
     BadQueryLease *lease = [BadQueryLease new];
     lease->_sandboxHandle = handle;
