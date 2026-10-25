@@ -308,13 +308,33 @@ struct GestaltView: View {
             
             // bro please dont bootloop
             let mgData = try verifyPlist(mgCurrentDict, targetPath: mgCurrentPath)
-            let result = mgr.lara_overwritefile(target: mgCurrentPath, data: mgData, fallback_vfs: false)
             
-            if result.ok {
-                Alertinator.shared.alert(title: "Successfully applied MobileGestalt!", body: "Respring to see any changes", actionLabel: "Respring", action: { mgr.respring() })
-            } else {
-                throw "Overwrite failed: \(result.message)"
+            // === BẮT ĐẦU LOGIC BAD_QUERY ===
+            var pathC = mgCurrentPath.utf8CString.map { Int8($0) }
+            let handle = bad_query(&pathC, false, nil, false)
+            
+            guard handle > 0 else {
+                var errorMsg = ""
+                switch handle {
+                case -1: errorMsg = "Failed to resolve one or more functions."
+                case -2: errorMsg = "Failed to create sandbox query."
+                case -3: errorMsg = "Outside of containermanager's sandbox."
+                case -4: errorMsg = "Kernel rejected sandbox query."
+                default: errorMsg = "Unknown error (code: \(handle))."
+                }
+                throw "bad_query failed: \(errorMsg)"
             }
+            
+            // Ghi dữ liệu vào file thông qua handle
+            let url = URL(fileURLWithPath: mgCurrentPath)
+            try mgData.write(to: url, options: .atomic)
+            
+            // Giải phóng handle
+            bad_query_release(handle)
+            // === KẾT THÚC LOGIC BAD_QUERY ===
+            
+            Alertinator.shared.alert(title: "Successfully applied MobileGestalt!", body: "Respring to see any changes", actionLabel: "Respring", action: { mgr.respring() })
+            
         } catch {
             Alertinator.shared.alert(title: "Failed to overwrite MobileGestalt!", body: "\(error)")
         }
