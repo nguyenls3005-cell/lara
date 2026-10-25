@@ -9,8 +9,30 @@ import Foundation
 import Darwin
 
 // ==========================================
-// ENUM FILETLOC (BẮT BUỘC - ĐỂ CÁC FILE KHÁC KHÔNG BỊ LỖI)
+// KHAI BÁO BIẾN TOÀN CỤC (ĐỂ CÁC FILE KHÁC DÙNG CHUNG)
 // ==========================================
+let mgCurrentPath = "/private/var/containers/Shared/SystemGroup/systemgroup.com.apple.mobilegestaltcache/Library/Caches/com.apple.MobileGestalt.plist"
+
+func verifyPlist(_ plist: Any, targetPath: String) throws -> Data {
+    let fm = FileManager.default
+    if fm.fileExists(atPath: targetPath) {
+        let attrs = try fm.attributesOfItem(atPath: targetPath)
+        if let current = attrs[.size] as? NSNumber, current.intValue == 0 {
+            throw "Current MobileGestalt file is 0 bytes."
+        }
+    }
+    
+    guard PropertyListSerialization.propertyList(plist, isValidFor: .binary) else {
+        throw "Invalid plist structure."
+    }
+    
+    let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .binary, options: 0)
+    if data.isEmpty {
+        throw "Serialized plist data is empty."
+    }
+    return data
+}
+
 enum fileloc: String, CaseIterable {
     case springboard = "/var/Managed Preferences/mobile/com.apple.springboard.plist"
     case footnote = "/var/containers/Shared/SystemGroup/systemgroup.com.apple.configurationprofiles/Library/ConfigurationProfiles/SharedDeviceConfiguration.plist"
@@ -79,7 +101,7 @@ func writeFileAtomically(_ data: Data, to url: URL) -> (Bool, String) {
 // GIAO DIỆN EROSION (ĐÃ ĐỔI SANG LARA)
 // ==========================================
 struct GestaltView: View {
-    @EnvironmentObject private var mgr: laramgr // Dùng laramgr của Lara
+    @EnvironmentObject private var mgr: laramgr
     @StateObject private var store = GestaltStore.shared
     @AppStorage("mgOverrideGates") private var mgOverrideGates = false
     @AppStorage("mgWriteAtomically") private var mgWriteAtomically = true
