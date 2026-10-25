@@ -1,18 +1,27 @@
 #!/bin/bash
 set -euo pipefail
 
+# Lấy đường dẫn tuyệt đối của thư mục hiện tại
+CURRENT_DIR="$(pwd)"
+FRAMEWORK_PATH="${CURRENT_DIR}/Frameworks"
+BRIDGING_HEADER_PATH="${CURRENT_DIR}/lara/lara-Bridging-Header.h"
+
 rm -rf build/
 mkdir -p build
 
 echo "Build Started!"
 echo
 
+# Truyền các biến cấu hình để Xcode tìm thấy AirliftFFI và Bridging Header
 xcodebuild \
   -project lara.xcodeproj \
   -scheme lara \
   -configuration Debug \
   -sdk iphoneos \
   -arch arm64e \
+  FRAMEWORK_SEARCH_PATHS="${FRAMEWORK_PATH}" \
+  OTHER_LDFLAGS="-framework AirliftFFI" \
+  SWIFT_OBJC_BRIDGING_HEADER="${BRIDGING_HEADER_PATH}" \
   CODE_SIGNING_ALLOWED=NO \
   CODE_SIGNING_REQUIRED=NO \
   CODE_SIGN_IDENTITY="" \
