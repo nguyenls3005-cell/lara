@@ -10,6 +10,7 @@
 // thank you @lunginspector for the rewrite + tweak additions
 
 import SwiftUI
+import Foundation
 
 enum fileloc: String, CaseIterable {
     case springboard = "/var/Managed Preferences/mobile/com.apple.springboard.plist"
@@ -43,7 +44,6 @@ struct GestaltView: View {
     @State private var mgProductType: String = ""
     
     @State private var mgShowFileSheet: Bool = false
-    
     @State private var nuggetValues: [String: Bool] = [:]
     
     var body: some View {
@@ -55,7 +55,7 @@ struct GestaltView: View {
                     } label: {
                         Text("Apply Tweaks")
                     }
-                    .disabled(!mgr.sbxready) // LOGIC BAD_QUERY
+                    .disabled(!mgr.sbxready) // Chờ Bad_query chạy thành công
                     
                     Button {
                         resetnugget()
@@ -63,10 +63,9 @@ struct GestaltView: View {
                     } label: {
                         Text("Reset Tweaks")
                     }
-                    .disabled(!mgr.sbxready) // LOGIC BAD_QUERY
+                    .disabled(!mgr.sbxready)
                 }
                 
-                // artwork tweaks will be added when applying mobilegestalt because there's no "toggleable" bindings.
                 Section(header: HeaderLabel(text: "Device Artwork", icon: "paintbrush.pointed")) {
                     Picker(selection: $mgSubtype) {
                         Text("Original (\(mgOriginalSubtype))").tag(mgOriginalSubtype)
@@ -122,7 +121,6 @@ struct GestaltView: View {
                     PlainToggle(text: "Pulse Width Modulation", icon: "eye", minSupportedVersion: 19.0, isOn: mgKeyBinding(["6IejgN+1Fmu5/QrZFOIeNw"]))
                 }
                 
-                // some odd bindings in here that i dislike.
                 Section(header: HeaderLabel(text: "Eligibility", icon: "checklist")) {
                     PlainToggle(text: "Security Research Device UI", icon: "terminal", minSupportedVersion: 26.0, isOn: mgKeyBinding(["XYlJKKkj2hztRP1NWWnhlw"]))
                     PlainToggle(text: "Disable Region Restrictions", icon: "globe", isOn: mgRegionRestrictionsBinding())
@@ -173,7 +171,7 @@ struct GestaltView: View {
                     if UIDevice.current.userInterfaceIdiom == .pad {
                         PlainToggle(text: "Stage Manager", icon: "squares.leading.rectangle", isOn: mgKeyBinding(["qeaj75wk3HF4DwQ8qbIi7g"]))
                     }
-                    PlainToggle(text: "iPadOS UI", icon: "ipad", infoType: .warning, infoMessage: "This is a very dangerous tweak to use! If you use an alphanumeric passcode, DO NOT USE THIS TWEAK AT ALL! Please do not turn off \"Show Dock In Stage Manager\" or your device will BOOTLOOP when rotating to landscape! With these two things in mind, you may experience general instability, or other major issues such as app data randomly disappearing. But I guess some funny multitasking features that still make the device relatively unusable are cool? Whatever dude, I'm not here to tell you how to use your own device.", isOn: mgTrollPadBinding())
+                    PlainToggle(text: "iPadOS UI", icon: "ipad", infoType: .warning, infoMessage: "This is a very dangerous tweak to use!", isOn: mgTrollPadBinding())
                         .disabled(cacheExtra?["+3Uf0Pm5F8Xy7Onyvko0vA"] as? String != "iPhone")
                 }
                 
@@ -183,7 +181,6 @@ struct GestaltView: View {
                     // ĐÃ XÓA Metal HUD in All Apps
                 }
                 
-                // ĐÃ XÓA CÁC MỤC TRONG UI TWEAKS THEO YÊU CẦU
                 Section {
                     PlainToggle(
                         text: "Hide Dynamic Island Completely",
@@ -196,9 +193,7 @@ struct GestaltView: View {
                 } header: {
                     HeaderLabel(text: "UI Tweaks", icon: "eye")
                 }
-                
-                // ĐÃ XÓA HOÀN TOÀN SECTION SPRINGBOARD
-                // ĐÃ XÓA HOÀN TOÀN SECTION DEBUG
+                // ĐÃ XÓA SpringBoard và Debug
             }
             .navigationTitle("MobileGestalt")
             .toolbar {
@@ -235,7 +230,6 @@ struct GestaltView: View {
     private func loadCurrentGestalt() {
         do {
             mgCurrentDict = try loadMutablePlistDictionary(from: URL(fileURLWithPath: mgCurrentPath))
-            print(mgCurrentDict.description)
             prepareGestaltData()
         } catch {
             Alertinator.shared.alert(title: "Failed to load current MobileGestalt!", body: "\(error)")
@@ -248,7 +242,6 @@ struct GestaltView: View {
         let mgCurrentURL = URL(fileURLWithPath: mgCurrentPath)
         
         do {
-            // check if MobileGestalt has ever been saved, and if it hasn't, save it.
             if !FileManager.default.fileExists(atPath: mgSavedURL.path) {
                 try FileManager.default.copyItem(at: mgCurrentURL, to: mgSavedURL)
             }
@@ -289,9 +282,12 @@ struct GestaltView: View {
         return !cacheExtra.allKeys.isEmpty
     }
     
+    // ==========================================
+    // LOGIC BAD_QUERY + FD WRITE AN TOÀN (CHỐNG BOOTLOOP)
+    // ==========================================
     private func applyGestalt() {
         do {
-            // first, update the dictionary with some specific properties.
+            // 1. Chuẩn bị dữ liệu
             let cacheExtra = mgCurrentDict["CacheExtra"] as? NSMutableDictionary ?? NSMutableDictionary()
             if !mgProductType.isEmpty {
                 cacheExtra["h9jDsbgj7xIVeIQ8S3/X3Q"] = mgProductType
@@ -303,37 +299,75 @@ struct GestaltView: View {
                 ArtworkDict["ArtworkDeviceProductDescription"] = mgDeviceName
             }
             
-            // then, check to make sure it's actually valid
-            if !vaildateCacheExtra(mgCurrentDict) { throw "MobileGestalt is not vaild! Please restart the app." }
-            
-            // bro please dont bootloop
+            if !vaildateCacheExtra(mgCurrentDict) { throw "MobileGestalt is not valid! Please restart the app." }
             let mgData = try verifyPlist(mgCurrentDict, targetPath: mgCurrentPath)
             
-            // === BẮT ĐẦU LOGIC BAD_QUERY ===
-            var pathC = mgCurrentPath.utf8CString.map { Int8($0) }
-            let handle = bad_query(&pathC, false, nil, false)
+            // 2. Lấy fd thông qua bad_query
+            var pathC = Array(mgCurrentPath.utf8CString)
+            let fd = bad_query(&pathC, false, nil, false)
             
-            guard handle > 0 else {
+            guard fd > 0 else {
                 var errorMsg = ""
-                switch handle {
-                case -1: errorMsg = "Failed to resolve one or more functions."
+                switch fd {
+                case -1: errorMsg = "Failed to resolve functions."
                 case -2: errorMsg = "Failed to create sandbox query."
                 case -3: errorMsg = "Outside of containermanager's sandbox."
                 case -4: errorMsg = "Kernel rejected sandbox query."
-                default: errorMsg = "Unknown error (code: \(handle))."
+                default: errorMsg = "Unknown error (code: \(fd))."
                 }
                 throw "bad_query failed: \(errorMsg)"
             }
             
-            // Ghi dữ liệu vào file thông qua handle
-            let url = URL(fileURLWithPath: mgCurrentPath)
-            try mgData.write(to: url, options: .atomic)
+            let fileDescriptor = Int32(fd)
             
-            // Giải phóng handle
-            bad_query_release(handle)
-            // === KẾT THÚC LOGIC BAD_QUERY ===
+            // 3. Sao lưu dữ liệu cũ để rollback nếu lỗi
+            let originalData = try? Data(contentsOf: URL(fileURLWithPath: mgCurrentPath))
             
-            Alertinator.shared.alert(title: "Successfully applied MobileGestalt!", body: "Respring to see any changes", actionLabel: "Respring", action: { mgr.respring() })
+            // 4. Truncate file về 0 byte (xóa dữ liệu cũ trên đĩa)
+            if ftruncate(fileDescriptor, 0) != 0 {
+                close(fileDescriptor)
+                throw "Failed to truncate file."
+            }
+            
+            // 5. Ghi dữ liệu mới (Sử dụng vòng lặp while để đảm bảo ghi hết toàn bộ data)
+            var bytesWritten = 0
+            let totalBytes = mgData.count
+            let success = mgData.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) -> Bool in
+                guard let baseAddress = buffer.baseAddress else { return false }
+                while bytesWritten < totalBytes {
+                    let result = write(fileDescriptor, baseAddress + bytesWritten, totalBytes - bytesWritten)
+                    if result <= 0 { return false }
+                    bytesWritten += result
+                }
+                return true
+            }
+            
+            // 6. Ép iOS ghi dữ liệu từ bộ nhớ đệm xuống ổ cứng
+            fsync(fileDescriptor)
+            
+            // 7. Kiểm tra lỗi, nếu có thì ROLLBACK (Khôi phục file gốc)
+            if !success || bytesWritten != totalBytes {
+                if let backup = originalData {
+                    ftruncate(fileDescriptor, 0)
+                    _ = backup.withUnsafeBytes { buffer in
+                        write(fileDescriptor, buffer.baseAddress, backup.count)
+                    }
+                    fsync(fileDescriptor)
+                }
+                close(fileDescriptor)
+                throw "Failed to write data. File was rolled back to prevent bootloop."
+            }
+            
+            // 8. Đóng fd
+            close(fileDescriptor)
+            
+            // 9. Thành công
+            Alertinator.shared.alert(
+                title: "Successfully applied MobileGestalt!",
+                body: "Respring to see any changes",
+                actionLabel: "Respring",
+                action: { mgr.respring() }
+            )
             
         } catch {
             Alertinator.shared.alert(title: "Failed to overwrite MobileGestalt!", body: "\(error)")
@@ -365,8 +399,6 @@ struct GestaltView: View {
         return false
     }
     
-    // https://stackoverflow.com/questions/26028918/how-to-determine-the-current-iphone-device-model
-    // read device model from kernel
     func machineName() -> String {
         var systemInfo = utsname()
         uname(&systemInfo)
@@ -377,25 +409,18 @@ struct GestaltView: View {
         }
     }
 
-    // default = 0 (off in Gesalt Terms), enable = 1 (on)
-    // "gesalt" lol (roooot, 12.05.2026)
-    // return just returns a boolean
     private func mgKeyBinding<T: Equatable>(_ keys: [String], type: T.Type = Int.self, defaultValue: T? = 0, enableValue: T? = 1) -> Binding<Bool>  {
-        // immediately return false if it can't find cacheextra, again why is this here? i think it's safety.
         guard let cacheExtra = mgCurrentDict["CacheExtra"] as? NSMutableDictionary else {
             return State(initialValue: false).projectedValue
         }
         
-        // then return the binding
         return Binding(get: {
-            // get the value in terms of the type and return it as a bool.
             if let value = cacheExtra[keys.first!] as? T?, let enableValue {
                 return value == enableValue
             }
             return false
         }, set: { enabled in
             for key in keys {
-                // if it exists inside of the plist, then update it. if not then pull the value completely. that also makes sense.
                 if enabled {
                     cacheExtra[key] = enableValue
                 } else {
@@ -412,12 +437,12 @@ struct GestaltView: View {
         }
         let valueOffset = findcachedataoff("mtrAoWJ3gsq+I90ZnQ0vQw")
         let keys = [
-            "uKc7FPnEO++lVhHWHFlGbQ", // ipad
-            "mG0AnH/Vy1veoqoLRAIgTA", // MedusaFloatingLiveAppCapability
-            "UCG5MkVahJxG1YULbbd5Bg", // MedusaOverlayAppCapability
-            "ZYqko/XM5zD3XBfN5RmaXA", // MedusaPinnedAppCapability
-            "nVh/gwNpy7Jv1NOk00CMrw", // MedusaPIPCapability,
-            "qeaj75wk3HF4DwQ8qbIi7g", // DeviceSupportsEnhancedMultitasking
+            "uKc7FPnEO++lVhHWHFlGbQ",
+            "mG0AnH/Vy1veoqoLRAIgTA",
+            "UCG5MkVahJxG1YULbbd5Bg",
+            "ZYqko/XM5zD3XBfN5RmaXA",
+            "nVh/gwNpy7Jv1NOk00CMrw",
+            "qeaj75wk3HF4DwQ8qbIi7g",
         ]
         
         return Binding(get: {
@@ -427,7 +452,7 @@ struct GestaltView: View {
             return false
         }, set: { enabled in
             if enabled {
-                Alertinator.shared.alert(title: "Warning!", body: "This is a very dangerous tweak to use! If you use an alphanumeric passcode, DO NOT USE THIS TWEAK AT ALL! Please do not turn off \"Show Dock In Stage Manager\" or your device will BOOTLOOP when rotating to landscape! With these two things in mind, you may experience general instability, or other major issues such as app data randomly disappearing. But I guess some funny multitasking features that still make the device relatively unusable are cool? Whatever dude, I'm not here to tell you how to use your own device.")
+                Alertinator.shared.alert(title: "Warning!", body: "This is a very dangerous tweak to use!")
             }
             cacheData.mutableBytes.storeBytes(of: enabled ? 3 : 1, toByteOffset: valueOffset, as: Int.self)
             for key in keys {
@@ -452,7 +477,7 @@ struct GestaltView: View {
             },
             set: { enabled in
                 if enabled {
-                    Alertinator.shared.alert(title: "Warning!", body: "Please do not use this feature to bypass region restrictions that would equate to breaking regional laws (e.g. disabling the camera shutter sound). We will NOT be held responsible for enabling any illegal activites!")
+                    Alertinator.shared.alert(title: "Warning!", body: "Please do not use this feature to bypass region restrictions.")
                     cacheExtra["h63QSdBCiT/z0WU6rdQv6Q"] = "US"
                     cacheExtra["zHeENZu+wbg7PUprwNwBWg"] = "LL/A"
                 } else {
