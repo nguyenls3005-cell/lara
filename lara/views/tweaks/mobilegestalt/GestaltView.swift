@@ -9,10 +9,28 @@ import Foundation
 import Darwin
 
 // ==========================================
+// ENUM FILETLOC (BẮT BUỘC - ĐỂ CÁC FILE KHÁC KHÔNG BỊ LỖI)
+// ==========================================
+enum fileloc: String, CaseIterable {
+    case springboard = "/var/Managed Preferences/mobile/com.apple.springboard.plist"
+    case footnote = "/var/containers/Shared/SystemGroup/systemgroup.com.apple.configurationprofiles/Library/ConfigurationProfiles/SharedDeviceConfiguration.plist"
+    case airdrop = "/var/Managed Preferences/mobile/com.apple.sharingd.plist"
+    case nanoregistry = "/var/mobile/Library/Preferences/com.apple.NanoRegistry.plist"
+    case globalprefs = "/var/Managed Preferences/mobile/.GlobalPreferences.plist"
+    case appstore = "/var/Managed Preferences/mobile/com.apple.AppStore.plist"
+    case backboardd = "/var/Managed Preferences/mobile/com.apple.backboardd.plist"
+    case coremotion = "/var/Managed Preferences/mobile/com.apple.CoreMotion.plist"
+    case pasteboard = "/var/Managed Preferences/mobile/com.apple.Pasteboard.plist"
+    case notes = "/var/Managed Preferences/mobile/com.apple.mobilenotes.plist"
+    case uikit = "/var/Managed Preferences/mobile/com.apple.UIKit.plist"
+}
+
+// ==========================================
 // HELPER GHI FILE AN TOÀN (EROSION)
 // ==========================================
 private func readAll(_ fd: Int32) throws -> Data {
-    var res = Data(); var buf = [UInt8](repeating: 0, count: 64 * 1024)
+    var res = Data()
+    var buf = [UInt8](repeating: 0, count: 64 * 1024)
     while true {
         let count = buf.withUnsafeMutableBytes { read(fd, $0.baseAddress, $0.count) }
         if count > 0 { res.append(buf, count: count); continue }
@@ -61,7 +79,7 @@ func writeFileAtomically(_ data: Data, to url: URL) -> (Bool, String) {
 // GIAO DIỆN EROSION (ĐÃ ĐỔI SANG LARA)
 // ==========================================
 struct GestaltView: View {
-    @EnvironmentObject private var mgr: laramgr // Thay thế ErosionManager
+    @EnvironmentObject private var mgr: laramgr // Dùng laramgr của Lara
     @StateObject private var store = GestaltStore.shared
     @AppStorage("mgOverrideGates") private var mgOverrideGates = false
     @AppStorage("mgWriteAtomically") private var mgWriteAtomically = true
@@ -104,52 +122,52 @@ struct GestaltView: View {
                     Toggle("Custom Device Name", isOn: $mgEnableDeviceName)
                     if mgEnableDeviceName { TextField("Device Name", text: $mgDeviceName) }
                 } header: {
-                    HeaderLabel("Artwork", symbol: "paintbrush.pointed")
+                    HeaderLabel(text: "Artwork", icon: "paintbrush.pointed")
                 }
                 
                 Section {
-                    PlainToggle("Enable Dynamic Island", minVrs: 19.0, isOn: store.mgKeyBinding([MGKey.island]))
-                    PlainToggle("Enable AOD", minVrs: 18.0, isOn: store.mgKeyBinding([MGKey.AOD, MGKey.AOTime]))
+                    PlainToggle(text: "Enable Dynamic Island", icon: "platter.filled.top.iphone", minSupportedVersion: 19.0, isOn: store.mgKeyBinding([MGKey.island]))
+                    PlainToggle(text: "Enable AOD", icon: "sun.max", minSupportedVersion: 18.0, isOn: store.mgKeyBinding([MGKey.AOD, MGKey.AOTime]))
                     if store.isEnabled([MGKey.AOD]) {
-                        PlainToggle("Enable AOD Vibrancy", minVrs: 18.0, isOn: store.mgKeyBinding([MGKey.AODVibrancy]))
+                        PlainToggle(text: "Enable AOD Vibrancy", icon: "rays", minSupportedVersion: 18.0, isOn: store.mgKeyBinding([MGKey.AODVibrancy]))
                     }
-                    PlainToggle("Enable Boot Chime", isOn: store.mgKeyBinding([MGKey.bootChime]))
+                    PlainToggle(text: "Enable Boot Chime", icon: "speaker.wave.3", isOn: store.mgKeyBinding([MGKey.bootChime]))
                 } header: {
-                    HeaderLabel("Hardware Features", symbol: "gearshape")
+                    HeaderLabel(text: "Hardware Features", icon: "gearshape")
                 }
                 
                 Section {
-                    PlainToggle("Enable Internal Install", infoType: .info, infoMessage: MGMsg.intInstall, isOn: store.mgKeyBinding([MGKey.intInstall]))
-                    PlainToggle("Enable Internal Build", infoType: .info, infoMessage: MGMsg.intBuild, isOn: store.mgKeyBinding([MGKey.intBuild]))
+                    PlainToggle(text: "Enable Internal Install", icon: "terminal", infoType: .info, infoMessage: MGMsg.intInstall, isOn: store.mgKeyBinding([MGKey.intInstall]))
+                    PlainToggle(text: "Enable Internal Build", icon: "terminal", infoType: .info, infoMessage: MGMsg.intBuild, isOn: store.mgKeyBinding([MGKey.intBuild]))
                 } header: {
-                    HeaderLabel("Internal", symbol: "ant")
+                    HeaderLabel(text: "Internal", icon: "ant")
                 }
                 
                 Section {
-                    PlainToggle("Enable SRD UI", minVrs: 26.0, isOn: store.mgKeyBinding([MGKey.srd]))
+                    PlainToggle(text: "Enable SRD UI", icon: "terminal", minSupportedVersion: 26.0, isOn: store.mgKeyBinding([MGKey.srd]))
                     if showRegionTweak {
-                        PlainToggle("Disable Region Restrictions", isOn: store.mgRegionRestrictionsBinding())
+                        PlainToggle(text: "Disable Region Restrictions", icon: "globe", isOn: store.mgRegionRestrictionsBinding())
                     }
-                    PlainToggle("Enable Apple Intelligence", minVrs: 18.1, isOn: store.mgKeyBinding([MGKey.appIntell]))
+                    PlainToggle(text: "Enable Apple Intelligence", icon: "apple.intelligence", minSupportedVersion: 18.1, isOn: store.mgKeyBinding([MGKey.appIntell]))
                 } header: {
-                    HeaderLabel("Eligibility", symbol: "flag")
+                    HeaderLabel(text: "Eligibility", icon: "flag")
                 }
                 
                 Section {
-                    PlainToggle("Crash Detection", isOn: store.mgKeyBinding([MGKey.crashDet]))
-                    PlainToggle("Pulse Width Modulation", minVrs: 19.0, isOn: store.mgKeyBinding([MGKey.pwm]))
-                    PlainToggle("Apple Pencil", isOn: store.mgKeyBinding([MGKey.appPencil]))
-                    PlainToggle("Camera Control", minVrs: 18.0, isOn: store.mgKeyBinding([MGKey.camButton, MGKey.grapPefr]))
-                    PlainToggle("Action Button", minVrs: 17.0, isOn: store.mgKeyBinding([MGKey.actButton]))
+                    PlainToggle(text: "Crash Detection", icon: "car", isOn: store.mgKeyBinding([MGKey.crashDet]))
+                    PlainToggle(text: "Pulse Width Modulation", icon: "eye", minSupportedVersion: 19.0, isOn: store.mgKeyBinding([MGKey.pwm]))
+                    PlainToggle(text: "Apple Pencil", icon: "pencil", isOn: store.mgKeyBinding([MGKey.appPencil]))
+                    PlainToggle(text: "Camera Control", icon: "camera.shutter.button", minSupportedVersion: 18.0, isOn: store.mgKeyBinding([MGKey.camButton, MGKey.grapPefr]))
+                    PlainToggle(text: "Action Button", icon: "button.vertical.left.press", minSupportedVersion: 17.0, isOn: store.mgKeyBinding([MGKey.actButton]))
                 } header: {
-                    HeaderLabel("Preference Bundles", symbol: "gear")
+                    HeaderLabel(text: "Preference Bundles", icon: "gear")
                 }
                 
                 Section {
-                    PlainToggle("Enable Stage Manager", isOn: store.mgKeyBinding([MGKey.stageMgr]))
-                    PlainToggle("Enable iPadOS UI", infoType: .warning, infoMessage: MGMsg.ipadOS, isOn: store.mgTrollPadBinding())
+                    PlainToggle(text: "Enable Stage Manager", icon: "squares.leading.rectangle", isOn: store.mgKeyBinding([MGKey.stageMgr]))
+                    PlainToggle(text: "Enable iPadOS UI", icon: "ipad", infoType: .warning, infoMessage: MGMsg.ipadOS, isOn: store.mgTrollPadBinding())
                 } header: {
-                    HeaderLabel("iPadOS", symbol: "ipad")
+                    HeaderLabel(text: "iPadOS", icon: "ipad")
                 }
             }
             .navigationTitle("MobileGestalt")
@@ -264,7 +282,7 @@ struct GestaltView: View {
 }
 
 // ==========================================
-// CÁC HÀM BỔ TRỢ UI/PHẦN CỨNG
+// HÀM HỖ TRỢ
 // ==========================================
 func machineName() -> String {
     var systemInfo = utsname()
@@ -278,29 +296,4 @@ func machineName() -> String {
 
 func doubleSysVrs() -> Double {
     return Double(UIDevice.current.systemVersion.split(separator: ".").first ?? "0") ?? 0.0
-}
-
-// Stub cho HeaderLabel và PlainToggle (nếu Lara chưa có)
-struct HeaderLabel: View {
-    let text: String
-    let symbol: String
-    init(_ text: String, symbol: String) { self.text = text; self.symbol = symbol }
-    var body: some View { Label(text, systemImage: symbol) }
-}
-
-struct PlainToggle: View {
-    let text: String
-    let minVrs: Double?
-    let infoType: InfoType?
-    let infoMessage: String?
-    @Binding var isOn: Bool
-    enum InfoType { case info, warning }
-    
-    init(_ text: String, minVrs: Double? = nil, infoType: InfoType? = nil, infoMessage: String? = nil, isOn: Binding<Bool>) {
-        self.text = text; self.minVrs = minVrs; self.infoType = infoType; self.infoMessage = infoMessage; self._isOn = isOn
-    }
-    
-    var body: some View {
-        Toggle(text, isOn: $isOn).disabled(minVrs != nil && doubleSysVrs() < minVrs!)
-    }
 }
