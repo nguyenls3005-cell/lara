@@ -20,7 +20,7 @@ xcodebuild \
   -arch arm64 \
   FRAMEWORK_SEARCH_PATHS="${FRAMEWORK_PATH}" \
   HEADER_SEARCH_PATHS="${HEADER_PATH}" \
-  OTHER_LDFLAGS="-force_load ${FRAMEWORK_PATH}/libairlift_ffi.a -framework Security -framework SystemConfiguration -framework UIKit -framework Foundation" \
+  OTHER_LDFLAGS="-force_load ${FRAMEWORK_PATH}/libairlift_ffi.a -framework Security -framework SystemConfiguration -framework UIKit -framework Foundation -framework NetworkExtension" \
   SWIFT_OBJC_BRIDGING_HEADER="${BRIDGING_HEADER_PATH}" \
   CODE_SIGNING_ALLOWED=NO \
   CODE_SIGNING_REQUIRED=NO \
