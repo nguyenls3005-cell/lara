@@ -7,9 +7,6 @@ import SwiftUI
 import UniformTypeIdentifiers
 import Darwin
 
-// Định nghĩa kiểu Callback nhận log từ thư viện C (Rust)
-typealias ALLogCallback = @convention(c) (UnsafeMutableRawPointer?, UnsafePointer<CChar>?) -> Void
-
 struct ContentView: View {
     @EnvironmentObject private var mgr: laramgr
     @ObservedObject private var logger = globallogger
@@ -21,7 +18,6 @@ struct ContentView: View {
     @State private var showSuccessAlert = false
     @State private var alertMessage = "Action completed successfully."
     
-    // Trạng thái cho Airlift
     @State private var hasPairingFile = false
     @State private var isTunnelActive = false
     @State private var showPairingImporter = false
@@ -78,7 +74,7 @@ struct ContentView: View {
     
     private var KRWSection: some View {
         Section {
-            // 1. RUN BAD_QUERY (Giả lập - hoặc dùng logic thật của Lara)
+            // 1. RUN BAD_QUERY
             LabeledContent(content: {
                 if mgr.sbxready {
                     Image(systemName: "checkmark.circle")
@@ -125,16 +121,13 @@ struct ContentView: View {
                 Button("Run Airlift", action: {
                     mgr.vfsrunning = true
                     
-                    // Lấy đường dẫn tới file pairing
                     let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
                     let pairingPath = docs.appendingPathComponent("airlift_pairing.plist").path
-                    
-                    // Đích đến để test exploit (Thư mục Passes/Cards thường được bảo vệ)
                     let targetDir = "/var/mobile/Library/Passes/Cards"
                     
                     DispatchQueue.global(qos: .userInitiated).async {
-                        // Callback để nhận log từ Rust in ra Xcode Console
-                        let logCallback: ALLogCallback = { ctx, msg in
+                        // Swift closure với @convention(c) - KHÔNG cần typealias nữa vì đã có trong header
+                        let logCallback: @convention(c) (UnsafeMutableRawPointer?, UnsafePointer<CChar>?) -> Void = { ctx, msg in
                             if let msg = msg {
                                 print("[Airlift Native] \(String(cString: msg))")
                             }
@@ -143,14 +136,12 @@ struct ContentView: View {
                         var outJson: UnsafeMutablePointer<CChar>? = nil
                         var outError: UnsafeMutablePointer<CChar>? = nil
                         
-                        // Gọi hàm C al_exploit_run
                         let result = pairingPath.withCString { pairingC in
                             targetDir.withCString { targetC in
                                 al_exploit_run(pairingC, targetC, logCallback, nil, &outJson, &outError)
                             }
                         }
                         
-                        // Xử lý kết quả trả về
                         if let error = outError {
                             print("[Airlift Native] Exploit error: \(String(cString: error))")
                             al_string_free(error)
@@ -161,12 +152,10 @@ struct ContentView: View {
                             al_string_free(json)
                         }
                         
-                        // Cập nhật giao diện
                         DispatchQueue.main.async {
                             mgr.vfsrunning = false
                             
                             if result == 0 {
-                                // Thành công (code 0)
                                 mgr.vfsready = true
                                 if mgr.sbxready {
                                     selectedmethod = .vfs
@@ -177,7 +166,6 @@ struct ContentView: View {
                                 }
                                 showSuccessAlert = true
                             } else {
-                                // Thất bại (code 1 hoặc lỗi khác)
                                 alertMessage = "Airlift exploit failed. Check Xcode logs for details."
                                 showSuccessAlert = true
                             }
@@ -187,7 +175,6 @@ struct ContentView: View {
                 .disabled(!mgr.sbxready || mgr.vfsready || mgr.vfsrunning || !hasPairingFile || !isTunnelActive)
             }
             
-            // 3. ĐIỀU KIỆN TIÊN QUYẾT (Pairing file & Tunnel)
             if !mgr.vfsready {
                 if !hasPairingFile {
                     Button {
@@ -224,7 +211,6 @@ struct ContentView: View {
     private var ActionsSection: some View {
         Section(header: HeaderLabel(text: "Actions", icon: "wrench.and.screwdriver")) {
             Button("Respring", action: {
-                // Giả lập
             })
         }
     }
@@ -265,20 +251,20 @@ struct ContentView: View {
         }
     }
     
-    // MARK: - LOGIC PAIRING FILE (AIRCARD)
+    // MARK: - PAIRING & TUNNEL
     private func handlePairingImport(result: Result<[URL], Error>) {
         switch result {
         case .success(let urls):
             guard let url = urls.first else { return }
             
             guard let data = try? Data(contentsOf: url), !data.isEmpty else {
-                alertMessage = "Invalid pairing file. The file is empty (0 bytes)."
+                alertMessage = "Invalid pairing file. The file is empty."
                 showSuccessAlert = true
                 return
             }
             
-            let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            let destURL = documentsDir.appendingPathComponent("airlift_pairing.plist")
+            let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            let destURL = docs.appendingPathComponent("airlift_pairing.plist")
             do {
                 try data.write(to: destURL, options: .atomic)
                 hasPairingFile = true
@@ -286,7 +272,7 @@ struct ContentView: View {
                 alertMessage = "Pairing file imported successfully."
                 showSuccessAlert = true
             } catch {
-                alertMessage = "Failed to save pairing file: \(error.localizedDescription)"
+                alertMessage = "Failed to save: \(error.localizedDescription)"
                 showSuccessAlert = true
             }
             
@@ -296,13 +282,10 @@ struct ContentView: View {
         }
     }
     
-    // MARK: - LOGIC TUNNEL (AIRCARD)
     private func checkTunnelStatus() {
         var ifaddr: UnsafeMutablePointer<ifaddrs>?
         guard getifaddrs(&ifaddr) == 0, let firstAddr = ifaddr else {
             isTunnelActive = false
-            alertMessage = "Failed to scan network interfaces."
-            showSuccessAlert = true
             return
         }
         defer { freeifaddrs(ifaddr) }
@@ -310,25 +293,18 @@ struct ContentView: View {
         var tunnelDetected = false
         for ptr in sequence(first: firstAddr, next: { $0.pointee.ifa_next }) {
             let interface = ptr.pointee
-            
             guard let addr = interface.ifa_addr, addr.pointee.sa_family == sa_family_t(AF_INET) else {
                 continue
             }
-            
             let name = String(cString: interface.ifa_name).lowercased()
-            
             if name.hasPrefix("utun") || name.hasPrefix("ipsec") || name.hasPrefix("ppp") || name.hasPrefix("tun") || name.hasPrefix("tap") {
                 tunnelDetected = true
                 break
             }
         }
-        
         isTunnelActive = tunnelDetected
         if tunnelDetected {
             alertMessage = "Tunnel detected. Run Airlift is now available."
-            showSuccessAlert = true
-        } else {
-            alertMessage = "No tunnel detected. Please ensure LocalDevVPN is running."
             showSuccessAlert = true
         }
     }
