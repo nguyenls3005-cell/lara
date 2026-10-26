@@ -107,7 +107,7 @@ struct ContentView: View {
                 .disabled(mgr.sbxready || mgr.dsrunning)
             }
             
-            // 2. RUN AIRLIFT (THẬT 100%)
+            // 2. RUN AIRLIFT (ĐÃ FIX)
             LabeledContent(content: {
                 if mgr.vfsready {
                     Image(systemName: "checkmark.circle")
@@ -121,20 +121,28 @@ struct ContentView: View {
                 Button("Run Airlift", action: {
                     mgr.vfsrunning = true
                     
+                    // NẠP FRAMEWORK NGẦM ĐỂ LẤY GRAPPA TOKEN
+                    let frameworks = [
+                        "/System/Library/PrivateFrameworks/AirTraffic.framework/AirTraffic",
+                        "/System/Library/PrivateFrameworks/MobileAsset.framework/MobileAsset",
+                        "/System/Library/PrivateFrameworks/MobileSoftwareUpdate.framework/MobileSoftwareUpdate"
+                    ]
+                    for path in frameworks { dlopen(path, RTLD_NOW | RTLD_GLOBAL) }
+                    
                     let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
                     let pairingPath = docs.appendingPathComponent("airlift_pairing.plist").path
                     let targetDir = "/var/mobile/Library/Passes/Cards"
                     
                     DispatchQueue.global(qos: .userInitiated).async {
-                        // Swift closure với @convention(c) - KHÔNG cần typealias nữa vì đã có trong header
-                        let logCallback: @convention(c) (UnsafeMutableRawPointer?, UnsafePointer<CChar>?) -> Void = { ctx, msg in
-                            if let msg = msg {
-                                print("[Airlift Native] \(String(cString: msg))")
-                            }
+                        let logCallback: @convention(c) (UnsafeMutableRawPointer?, UnsafePointer<CChar>?) -> Void = { _, msg in
+                            if let msg = msg { print("[Airlift Native] \(String(cString: msg))") }
                         }
                         
                         var outJson: UnsafeMutablePointer<CChar>? = nil
                         var outError: UnsafeMutablePointer<CChar>? = nil
+                        
+                        // SET HOST TRƯỚC KHI CHẠY
+                        _ = "10.7.0.1".withCString { al_set_target_host($0) }
                         
                         let result = pairingPath.withCString { pairingC in
                             targetDir.withCString { targetC in
@@ -146,15 +154,13 @@ struct ContentView: View {
                             print("[Airlift Native] Exploit error: \(String(cString: error))")
                             al_string_free(error)
                         }
-                        
                         if let json = outJson {
-                            print("[Airlift Native] Exploit result: \(String(cString: json))")
+                            print("[Airlift Native] Result: \(String(cString: json))")
                             al_string_free(json)
                         }
                         
                         DispatchQueue.main.async {
                             mgr.vfsrunning = false
-                            
                             if result == 0 {
                                 mgr.vfsready = true
                                 if mgr.sbxready {
@@ -164,11 +170,10 @@ struct ContentView: View {
                                     selectedmethod = .hybrid
                                     alertMessage = "Airlift executed successfully."
                                 }
-                                showSuccessAlert = true
                             } else {
-                                alertMessage = "Airlift exploit failed. Check Xcode logs for details."
-                                showSuccessAlert = true
+                                alertMessage = "Airlift exploit failed. Check Xcode logs."
                             }
+                            showSuccessAlert = true
                         }
                     }
                 })
@@ -196,9 +201,7 @@ struct ContentView: View {
         } header: {
             HeaderLabel(text: "Kernel Read Write", icon: "externaldrive")
         } footer: {
-            if isdebugged() {
-                Text("Not available while a debugger is attached.")
-            }
+            if isdebugged() { Text("Not available while a debugger is attached.") }
         }
         .onAppear {
             checkTunnelStatus()
@@ -210,8 +213,7 @@ struct ContentView: View {
     
     private var ActionsSection: some View {
         Section(header: HeaderLabel(text: "Actions", icon: "wrench.and.screwdriver")) {
-            Button("Respring", action: {
-            })
+            Button("Respring", action: { })
         }
     }
 
@@ -222,80 +224,53 @@ struct ContentView: View {
                 ScrollView {
                     if loggernobs {
                         let combined = logger.logs.joined(separator: "\n")
-                        Text(combined)
-                            .font(.system(size: 13, design: .monospaced))
-                            .lineSpacing(1)
-                            .textSelection(.enabled)
+                        Text(combined).font(.system(size: 13, design: .monospaced)).lineSpacing(1).textSelection(.enabled)
                     } else {
                         ForEach(Array(logger.logs.enumerated()), id: \.offset) { _, log in
-                            Text(log)
-                                .font(.system(size: 13, design: .monospaced))
-                                .lineSpacing(1)
-                                .textSelection(.enabled)
+                            Text(log).font(.system(size: 13, design: .monospaced)).lineSpacing(1).textSelection(.enabled)
                         }
                     }
                 }
                 .frame(height: 250)
-                
-                Button("Copy All") {
-                    UIPasteboard.general.string = logger.logs.joined(separator: "\n\n")
-                }
-                
-                Button("Clear") {
-                    logger.clear()
-                }
-                .foregroundColor(.red)
+                Button("Copy All") { UIPasteboard.general.string = logger.logs.joined(separator: "\n\n") }
+                Button("Clear") { logger.clear() }.foregroundColor(.red)
             } header: {
                 HeaderLabel(text: "Logs", icon: "terminal")
             }
         }
     }
     
-    // MARK: - PAIRING & TUNNEL
     private func handlePairingImport(result: Result<[URL], Error>) {
         switch result {
         case .success(let urls):
             guard let url = urls.first else { return }
-            
             guard let data = try? Data(contentsOf: url), !data.isEmpty else {
-                alertMessage = "Invalid pairing file. The file is empty."
-                showSuccessAlert = true
-                return
+                alertMessage = "Invalid pairing file."; showSuccessAlert = true; return
             }
-            
             let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             let destURL = docs.appendingPathComponent("airlift_pairing.plist")
             do {
                 try data.write(to: destURL, options: .atomic)
                 hasPairingFile = true
                 pairingFileName = url.lastPathComponent
-                alertMessage = "Pairing file imported successfully."
-                showSuccessAlert = true
+                alertMessage = "Pairing file imported successfully."; showSuccessAlert = true
             } catch {
-                alertMessage = "Failed to save: \(error.localizedDescription)"
-                showSuccessAlert = true
+                alertMessage = "Failed to save: \(error.localizedDescription)"; showSuccessAlert = true
             }
-            
         case .failure(let error):
-            alertMessage = "Import failed: \(error.localizedDescription)"
-            showSuccessAlert = true
+            alertMessage = "Import failed: \(error.localizedDescription)"; showSuccessAlert = true
         }
     }
     
     private func checkTunnelStatus() {
         var ifaddr: UnsafeMutablePointer<ifaddrs>?
-        guard getifaddrs(&ifaddr) == 0, let firstAddr = ifaddr else {
-            isTunnelActive = false
-            return
-        }
+        guard getifaddrs(&ifaddr) == 0, let firstAddr = ifaddr else { isTunnelActive = false; return }
         defer { freeifaddrs(ifaddr) }
         
         var tunnelDetected = false
         for ptr in sequence(first: firstAddr, next: { $0.pointee.ifa_next }) {
             let interface = ptr.pointee
-            guard let addr = interface.ifa_addr, addr.pointee.sa_family == sa_family_t(AF_INET) else {
-                continue
-            }
+            guard let addr = interface.ifa_addr, addr.pointee.sa_family == sa_family_t(AF_INET) else { continue }
             let name = String(cString: interface.ifa_name).lowercased()
             if name.hasPrefix("utun") || name.hasPrefix("ipsec") || name.hasPrefix("ppp") || name.hasPrefix("tun") || name.hasPrefix("tap") {
                 tunnelDetected = true
@@ -303,14 +278,5 @@ struct ContentView: View {
             }
         }
         isTunnelActive = tunnelDetected
-        if tunnelDetected {
-            alertMessage = "Tunnel detected. Run Airlift is now available."
-            showSuccessAlert = true
-        }
     }
-}
-
-#Preview {
-    ContentView()
-        .environmentObject(laramgr())
 }
