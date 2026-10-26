@@ -6,9 +6,22 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-// ĐÃ XÓA 2 ENUM BỊ TRÙNG LẶP VỚI SettingsView.swift
-// enum method: String, CaseIterable { case hybrid, vfs, sbx }
-// enum logsdisplaymode: String, CaseIterable { case toolbar, content, tabs }
+// BẮT BUỘC PHẢI CÓ ENUM NÀY ĐỂ ShowHiddenIconsView HOẠT ĐỘNG
+enum fileloc: String, CaseIterable {
+    case springboard = "/var/Managed Preferences/mobile/com.apple.springboard.plist"
+    case footnote = "/var/containers/Shared/SystemGroup/systemgroup.com.apple.configurationprofiles/Library/ConfigurationProfiles/SharedDeviceConfiguration.plist"
+    case airdrop = "/var/Managed Preferences/mobile/com.apple.sharingd.plist"
+    case nanoregistry = "/var/mobile/Library/Preferences/com.apple.NanoRegistry.plist"
+    case globalprefs = "/var/Managed Preferences/mobile/.GlobalPreferences.plist"
+    case appstore = "/var/Managed Preferences/mobile/com.apple.AppStore.plist"
+    case backboardd = "/var/Managed Preferences/mobile/com.apple.backboardd.plist"
+    case coremotion = "/var/Managed Preferences/mobile/com.apple.CoreMotion.plist"
+    case pasteboard = "/var/Managed Preferences/mobile/com.apple.Pasteboard.plist"
+    case notes = "/var/Managed Preferences/mobile/com.apple.mobilenotes.plist"
+    case uikit = "/var/Managed Preferences/mobile/com.apple.UIKit.plist"
+}
+
+// ĐÃ XÓA enum method VÀ logsdisplaymode VÌ BỊ TRÙNG VỚI SettingsView.swift
 
 enum taboptions {
     case applying, tweaks, files, logs
