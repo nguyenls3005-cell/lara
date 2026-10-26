@@ -5,6 +5,7 @@
 
 import SwiftUI
 import UniformTypeIdentifiers
+import Darwin
 
 // BẮT BUỘC PHẢI CÓ ENUM NÀY ĐỂ ShowHiddenIconsView HOẠT ĐỘNG
 enum fileloc: String, CaseIterable {
@@ -21,7 +22,35 @@ enum fileloc: String, CaseIterable {
     case uikit = "/var/Managed Preferences/mobile/com.apple.UIKit.plist"
 }
 
-// ĐÃ XÓA enum method VÀ logsdisplaymode VÌ BỊ TRÙNG VỚI SettingsView.swift
+// HÀM GHI FILE AN TOÀN ĐỂ ROLLBACK KHI BOOTLOOP
+func writeFileAtomically(_ data: Data, to url: URL) -> (Bool, String) {
+    let fd = url.path.withCString { open($0, O_RDWR | O_CLOEXEC | O_NOFOLLOW) }
+    guard fd >= 0 else { return (false, "Failed to open file (errno: \(errno))") }
+    defer { close(fd) }
+    
+    guard ftruncate(fd, 0) == 0 else { return (false, "Failed to truncate (errno: \(errno))") }
+    guard lseek(fd, 0, SEEK_SET) >= 0 else { return (false, "Failed to lseek") }
+    
+    var bytesWritten = 0
+    let totalBytes = data.count
+    let success = data.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) -> Bool in
+        guard let baseAddress = buffer.baseAddress else { return false }
+        while bytesWritten < totalBytes {
+            let result = write(fd, baseAddress + bytesWritten, totalBytes - bytesWritten)
+            if result <= 0 { return false }
+            bytesWritten += result
+        }
+        return true
+    }
+    
+    if success {
+        guard fsync(fd) == 0 else { return (false, "Failed to fsync (errno: \(errno))") }
+    }
+    
+    return (success, success ? "succeeded" : "Write failed")
+}
+
+// ĐÃ XÓA HOÀN TOÀN 2 ENUM method VÀ logsdisplaymode (ĐỂ TRÁNH TRÙNG VỚI SettingsView)
 
 enum taboptions {
     case applying, tweaks, files, logs
