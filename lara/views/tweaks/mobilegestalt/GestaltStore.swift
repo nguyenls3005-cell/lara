@@ -11,6 +11,53 @@ enum MGURL {
     static let savedGestaltURL = URL.documentsDirectory.appendingPathComponent("OriginalGestalt.plist")
 }
 
+// MARK: - Global plist path & helpers
+// Dùng bởi GestaltFileView, LiquidGlassView, và bất kỳ view nào cần đọc/ghi plist.
+
+/// Đường dẫn filesystem tới MobileGestalt.plist đang active.
+let mgCurrentPath = MGURL.fsGestaltURL.path
+
+/// Serialize một `NSMutableDictionary` thành `Data` plist, kèm bước
+/// round-trip verify để đảm bảo data sinh ra có thể đọc lại được.
+///
+/// - Parameters:
+///   - plist: Nội dung plist cần serialize.
+///   - targetPath: Đường dẫn file đích — dùng để detect format gốc
+///                 (binary / xml) và kiểm tra file có tồn tại không.
+/// - Returns: `Data` đã serialize, sẵn sàng để ghi ra `targetPath`.
+/// - Throws: `String` mô tả lỗi nếu target không tồn tại, serialize fail,
+///           hoặc round-trip verify fail.
+func verifyPlist(_ plist: NSMutableDictionary, targetPath: String) throws -> Data {
+    guard FileManager.default.fileExists(atPath: targetPath) else {
+        throw "Target plist does not exist: \(targetPath)"
+    }
+    
+    // Giữ nguyên format gốc của file (binary hay xml) để iOS không bị ngỡ
+    var format: PropertyListSerialization.PropertyListFormat = .binary
+    if let existingData = try? Data(contentsOf: URL(fileURLWithPath: targetPath)) {
+        var detected: PropertyListSerialization.PropertyListFormat = .binary
+        _ = try? PropertyListSerialization.propertyList(from: existingData, options: [], format: &detected)
+        format = detected
+    }
+    
+    let data: Data
+    do {
+        data = try PropertyListSerialization.data(fromPropertyList: plist, format: format, options: 0)
+    } catch {
+        throw "Plist serialization failed: \(error.localizedDescription)"
+    }
+    
+    // Round-trip: đảm bảo data vừa tạo parse lại được trước khi ghi ra disk
+    var verifyFormat: PropertyListSerialization.PropertyListFormat = .binary
+    guard (try? PropertyListSerialization.propertyList(from: data, options: [], format: &verifyFormat)) != nil else {
+        throw "Plist round-trip verification failed"
+    }
+    
+    return data
+}
+
+// ====== PHẦN CÒN LẠI CỦA FILE GIỮ NGUYÊN ======
+
 enum MGMsg {
     static let region = "Enabling this tweak may break regional laws! You could face legal action from your local jurisdiction. Use at your own risk."
     static let ipadOS = "If you're using an alphanumeric passcode, do not use this tweak at all. Do not turn off \"Show Dock In Stage Manager\" or your device will get softbricked. When this tweak is enabled, expect general instability, unusable apps, and broken device features."
