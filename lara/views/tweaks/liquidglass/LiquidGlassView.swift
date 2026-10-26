@@ -41,7 +41,7 @@ struct LiquidGlassView: View {
                 Section(header: HeaderLabel(text: "Liquid Glass", icon: "square.on.square.intersection.dashed")) {
                     Toggle("Disable Specular Motion", isOn: gpKeyBinding("SBDisableSpecularEverywhereUsingLSSAssertion"))
                     Toggle("Disable Outer Refraction", isOn: gpKeyBinding("SolariumDisableOuterRefraction"))
-                    Toggle("Disable Solarium HDR", isOn: gpKeyBinding("SolariumAllowHDR", default: true, enable: false))
+                    Toggle("Disable Solarium HDR", isOn: gpKeyBinding("SolariumAllowHDR", enable: false))
                 }
                 
                 Section(header: HeaderLabel(text: "Visibility", icon: "loupe")) {
@@ -98,7 +98,7 @@ struct LiquidGlassView: View {
             
             if FileManager.default.fileExists(atPath: gpSavedURL.path) {
                 let restored = try NSMutableDictionary(contentsOf: gpSavedURL, error: ())
-                _ = try verifyPlist(restored, targetPath: mgCurrentPath)
+                _ = try verifyPlist(restored, targetPath: gpCurrentPath)
                 gpCurrentDict = restored
             } else {
                 throw "No Global Prefs file found!"
@@ -109,19 +109,25 @@ struct LiquidGlassView: View {
     }
     
     // MARK: bindings
-    private func gpKeyBinding<T: Equatable>(_ key: String, type: T.Type = Bool.self, default: T? = false, enable: T? = true) -> Binding<Bool> {
+    
+    /// Toggle mặc định — value "true" nghĩa là bật.
+    private func gpKeyBinding(_ key: String) -> Binding<Bool> {
+        gpKeyBinding(key, enable: true)
+    }
+    
+    /// Toggle với custom "enabled" value (vd. key `SolariumAllowHDR` cần giá trị `false` khi bật).
+    private func gpKeyBinding<T: Equatable>(_ key: String, enable: T) -> Binding<Bool> {
         return Binding(get: {
             _ = dumbassToggleThatMakesTheViewUpdate
-            if let value = gpCurrentDict[key] as? T?, let enable {
+            if let value = gpCurrentDict[key] as? T {
                 return value == enable
             }
             return false
         }, set: { enabled in
+            dumbassToggleThatMakesTheViewUpdate.toggle()
             if enabled {
-                dumbassToggleThatMakesTheViewUpdate.toggle()
                 gpCurrentDict[key] = enable
             } else {
-                dumbassToggleThatMakesTheViewUpdate.toggle()
                 gpCurrentDict.removeObject(forKey: key)
             }
         })
