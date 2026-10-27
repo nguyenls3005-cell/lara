@@ -2,6 +2,8 @@
 //  TweaksView.swift
 //  lara
 //
+//  Created by lunginspector on 5/3/26.
+//
 
 import SwiftUI
 
@@ -17,13 +19,9 @@ struct TweaksView: View {
                         .disabled(!mgr.vfsready)
                 }
                 
-                // ĐÃ ĐỔI TÊN VÀ THÊM APPLE WALLET
-                Section(header: HeaderLabel(text: "Lock Screen & Theme", icon: "lock")) {
+                Section(header: HeaderLabel(text: "Lock Screen", icon: "lock")) {
                     NavigationLink("Passcode Theme", destination: PasscodeView(mgr: mgr))
-                        .disabled(!mgr.vfsready)
-                    
-                    NavigationLink("Apple Wallet", destination: WalletView())
-                        .disabled(!mgr.vfsready)
+                        .disabled(!mgr.sbxready)
                 }
                 
                 Section(header: HeaderLabel(text: "Apps", icon: "app")) {
@@ -37,29 +35,25 @@ struct TweaksView: View {
                 }
                 
                 Section(header: HeaderLabel(text: "System", icon: "gear")) {
-                    NavigationLink("Daemons", destination: DaemonsView())
-                        .disabled(!mgr.dsready)
+                    NavigationLink("Daemons", destination: OTAView(mgr: mgr)) 
+                    // ^ Lưu ý: Tao đổi tên hiển thị thành "Daemons". 
+                    // Nếu mày đã tạo file giao diện mới (vd: DaemonsView.swift), hãy đổi chữ OTAView thành DaemonsView.
                 }
+                
+                // Đã xóa toàn bộ Section "Broken" (DarkBoard)
+                // Đã xóa "Extra Tools"
             }
             .disabled(!mgr.dsready)
             .navigationTitle("Tweaks")
             .toolbar {
                 if selectedlogsdisplaymode == .toolbar {
-                    Button(action: { mgr.showLogs.toggle() }) {
+                    Button(action: {
+                        mgr.showLogs.toggle()
+                    }) {
                         Image(systemName: "terminal")
                     }
                 }
             }
         }
-    }
-}
-
-// View Daemons
-struct DaemonsView: View {
-    let daemons = ["com.apple.SpringBoard", "com.apple.backboardd", "com.apple.runningboardd"]
-    var body: some View {
-        List(daemons, id: \.self) { daemon in
-            Text(daemon)
-        }.navigationTitle("Daemons")
     }
 }
