@@ -99,6 +99,12 @@ struct GestaltView: View {
             var format = PropertyListSerialization.PropertyListFormat.binary
             if let dict = try PropertyListSerialization.propertyList(from: data, options: [.mutableContainersAndLeaves], format: &format) as? NSMutableDictionary {
                 store.mgCurrentDict = dict
+                
+                // Load lại tên máy hiện tại để không bị ghi đè rỗng
+                if let cacheExtra = dict["CacheExtra"] as? [String: Any],
+                   let currentProdType = cacheExtra[MGKey.prodType] as? String {
+                    mgProductType = currentProdType
+                }
             }
         } catch {
             alertMsg = "Failed to load: \(error.localizedDescription)"
@@ -111,7 +117,10 @@ struct GestaltView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             do {
                 if let cacheExtra = store.mgCurrentDict["CacheExtra"] as? NSMutableDictionary {
-                    cacheExtra[MGKey.prodType] = mgProductType
+                    // Chỉ ghi đè nếu có giá trị (tránh ghi chuỗi rỗng làm hỏng máy)
+                    if !mgProductType.isEmpty {
+                        cacheExtra[MGKey.prodType] = mgProductType
+                    }
                 }
                 
                 // Serialize plist
@@ -128,6 +137,10 @@ struct GestaltView: View {
                 if !result.0 { throw result.1 }
                 
                 self.isApplying = false
+                
+                // Tự động load lại UI sau khi ghi
+                self.loadGestalt()
+                
                 self.alertMsg = "Applied successfully! Respring required."
                 self.showAlert = true
             } catch {
@@ -138,11 +151,35 @@ struct GestaltView: View {
         }
     }
     
+    // ĐÃ THÊM LOGIC: Map Subtype chuẩn cho từng dòng máy
     private func applyDynamicIsland() {
-        // Logic update subtype
+        guard let cacheExtra = store.mgCurrentDict["CacheExtra"] as? NSMutableDictionary else { return }
+        
+        if mgSubtype == 0 {
+            cacheExtra.removeObject(forKey: MGKey.artwork)
+        } else {
+            // Map tag ID sang giá trị thực tế của iOS (dựa theo chuẩn của các tool khác)
+            let subtypeValues: [Int: String] = [
+                1: "2436", // 14 Pro
+                3: "2796", // 14 Pro Max
+                4: "2796", // 15 Pro Max
+                5: "2556", // 16 Pro
+                6: "2868", // 16 Pro Max
+                7: "2556"  // Air (tạm dùng hệ số của 16 Pro)
+            ]
+            if let val = subtypeValues[mgSubtype] {
+                cacheExtra[MGKey.artwork] = val
+            }
+        }
     }
     
+    // ĐÃ THÊM LOGIC: Lưu tên máy do mày nhập vào dict
     private func applyModelName() {
-        // Logic update model name
+        guard let cacheExtra = store.mgCurrentDict["CacheExtra"] as? NSMutableDictionary else { return }
+        if mgDeviceName.isEmpty {
+            cacheExtra.removeObject(forKey: MGKey.prodType)
+        } else {
+            cacheExtra[MGKey.prodType] = mgDeviceName
+        }
     }
 }
