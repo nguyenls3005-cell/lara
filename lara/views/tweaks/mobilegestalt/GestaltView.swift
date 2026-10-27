@@ -9,41 +9,6 @@ import Foundation
 import Darwin
 
 // ==========================================
-// KHAI BÁO BIẾN TOÀN CỤC
-// ==========================================
-let mgCurrentPath = "/private/var/containers/Shared/SystemGroup/systemgroup.com.apple.mobilegestaltcache/Library/Caches/com.apple.MobileGestalt.plist"
-
-func verifyPlist(_ plist: Any, targetPath: String) throws -> Data {
-    let fm = FileManager.default
-    if fm.fileExists(atPath: targetPath) {
-        let attrs = try fm.attributesOfItem(atPath: targetPath)
-        if let current = attrs[.size] as? NSNumber, current.intValue == 0 {
-            throw "Current MobileGestalt file is 0 bytes."
-        }
-    }
-    guard PropertyListSerialization.propertyList(plist, isValidFor: .binary) else {
-        throw "Invalid plist structure."
-    }
-    let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .binary, options: 0)
-    if data.isEmpty { throw "Serialized plist data is empty." }
-    return data
-}
-
-enum fileloc: String, CaseIterable {
-    case springboard = "/var/Managed Preferences/mobile/com.apple.springboard.plist"
-    case footnote = "/var/containers/Shared/SystemGroup/systemgroup.com.apple.configurationprofiles/Library/ConfigurationProfiles/SharedDeviceConfiguration.plist"
-    case airdrop = "/var/Managed Preferences/mobile/com.apple.sharingd.plist"
-    case nanoregistry = "/var/mobile/Library/Preferences/com.apple.NanoRegistry.plist"
-    case globalprefs = "/var/Managed Preferences/mobile/.GlobalPreferences.plist"
-    case appstore = "/var/Managed Preferences/mobile/com.apple.AppStore.plist"
-    case backboardd = "/var/Managed Preferences/mobile/com.apple.backboardd.plist"
-    case coremotion = "/var/Managed Preferences/mobile/com.apple.CoreMotion.plist"
-    case pasteboard = "/var/Managed Preferences/mobile/com.apple.Pasteboard.plist"
-    case notes = "/var/Managed Preferences/mobile/com.apple.mobilenotes.plist"
-    case uikit = "/var/Managed Preferences/mobile/com.apple.UIKit.plist"
-}
-
-// ==========================================
 // HELPER GHI FILE AN TOÀN (EROSION)
 // ==========================================
 private func readAll(_ fd: Int32) throws -> Data {
@@ -278,7 +243,11 @@ struct GestaltView: View {
                let artwork = cacheExtra[MGKey.artwork] as? NSMutableDictionary {
                 artwork["ArtworkDeviceSubType"] = mgSubtype
                 if mgEnableDeviceName { artwork["ArtworkDeviceProductDescription"] = mgDeviceName }
-                cacheExtra[MGKey.prodType] = mgProductType
+                
+                // FIX: Chỉ ghi đè nếu có giá trị, tránh ghi rỗng làm hỏng máy
+                if !mgProductType.isEmpty {
+                    cacheExtra[MGKey.prodType] = mgProductType
+                }
             } else {
                 throw "failed to write keys!"
             }
@@ -287,6 +256,9 @@ struct GestaltView: View {
             let res = mgWrite(data)
             
             if res {
+                // FIX: Load lại UI ngay lập tức
+                store.mgCurrentDict = mgDictToApply
+                
                 if autoRespring || isFromSheet { mgr.respring() }
                 else { Alertinator.shared.alert(title: "Successfully applied!", body: "Respring to see changes.", actionLabel: "Respring", action: { mgr.respring() }) }
             } else {
