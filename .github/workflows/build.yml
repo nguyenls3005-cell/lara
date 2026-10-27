@@ -30,6 +30,26 @@ jobs:
       - name: install ldid
         run: brew install ldid
 
+      # --- THÊM BƯỚC BUILD RUST TỪ ĐÂY ---
+      - name: setup rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+
+      - name: build rust core
+        run: |
+          cd rust-core
+          cargo build --release --target aarch64-apple-ios
+          
+          # Copy file .a mới build vào Xcode Framework
+          mkdir -p ../Frameworks/AirliftFFI.xcframework/ios-arm64
+          cp target/aarch64-apple-ios/release/libairlift_ffi.a ../Frameworks/AirliftFFI.xcframework/ios-arm64/
+          
+          # Copy header (nếu có) để Xcode không báo lỗi
+          mkdir -p ../Frameworks/AirliftFFI.xcframework/ios-arm64/Headers
+          cp -R include/* ../Frameworks/AirliftFFI.xcframework/ios-arm64/Headers/ || true
+      # --- KẾT THÚC PHẦN THÊM ---
+
       - name: build
         run: |
           chmod +x scripts/build_ipa.sh
