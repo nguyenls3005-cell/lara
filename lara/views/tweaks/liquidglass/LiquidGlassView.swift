@@ -98,7 +98,7 @@ struct LiquidGlassView: View {
             
             if FileManager.default.fileExists(atPath: gpSavedURL.path) {
                 let restored = try NSMutableDictionary(contentsOf: gpSavedURL, error: ())
-                _ = try verifyPlist(restored, targetPath: gpCurrentPath) // <-- CHỈ SỬA ĐÚNG CHỮ NÀY (Cũ là mgCurrentPath)
+                _ = try verifyPlist(restored, targetPath: mgCurrentPath)
                 gpCurrentDict = restored
             } else {
                 throw "No Global Prefs file found!"
