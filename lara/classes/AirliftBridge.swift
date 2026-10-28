@@ -37,8 +37,9 @@ final class AirliftBridge {
         }
 
         defer {
-            for ptr in [out.error, out.deviceName, out.deviceModel, out.deviceUdid,
-                        out.pairingFilePath, out.hostAltIrkHex] {
+            // C struct fields import as snake_case in Swift
+            for ptr in [out.error, out.device_name, out.device_model, out.device_udid,
+                        out.pairing_file_path, out.host_alt_irk_hex] {
                 if let p = ptr { al_string_free(p) }
             }
         }
@@ -49,7 +50,7 @@ final class AirliftBridge {
         }
 
         isPaired = true
-        pairingPath = out.pairingFilePath.map { String(cString: $0) }
+        pairingPath = out.pairing_file_path.map { String(cString: $0) }
     }
 
     func verifyWriteAccess(to targetDir: String) throws {
