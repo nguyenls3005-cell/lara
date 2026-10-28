@@ -27,6 +27,7 @@
 		15F024352FBB9510004BD090 /* podBackgroundViewDark.visualstyleset in Resources */ = {isa = PBXBuildFile; fileRef = 15F023FC2FBB9510004BD090 /* podBackgroundViewDark.visualstyleset */; };
 		9F4A1D2F3C4E567890123456 /* lara/lib/libxpf.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 9F4A1D2E3C4E567890123456 /* lara/lib/libxpf.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		9F4A1D423C4E567890123456 /* lara/lib/libgrabkernel2.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 9F4A1D413C4E567890123456 /* lara/lib/libgrabkernel2.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		A1AIRLIFT00000002A1AIRLIFT /* AirliftFFI.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1AIRLIFT00000001A1AIRLIFT /* AirliftFFI.xcframework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -80,6 +81,7 @@
 		A1B2C3D4E5F60002A1B2C3D4 /* lara/kexploit/ota.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lara/kexploit/ota.h; sourceTree = "<group>"; };
 		A1B2C3D4E5F60003A1B2C3D4 /* lara/kexploit/screentime.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = lara/kexploit/screentime.m; sourceTree = "<group>"; };
 		A1B2C3D4E5F60004A1B2C3D4 /* lara/kexploit/screentime.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lara/kexploit/screentime.h; sourceTree = "<group>"; };
+		A1AIRLIFT00000001A1AIRLIFT /* AirliftFFI.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = AirliftFFI.xcframework; path = Frameworks/AirliftFFI.xcframework; sourceTree = "<group>"; };
 		CC1C8B392F71DF9C00206982 /* lara.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = lara.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CC6842DF2F8311C300B08EB0 /* libSystem.B.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libSystem.B.tbd; path = usr/lib/libSystem.B.tbd; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
@@ -110,6 +112,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A1AIRLIFT00000002A1AIRLIFT /* AirliftFFI.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -250,6 +253,7 @@
 			isa = PBXGroup;
 			children = (
 				CC6842DF2F8311C300B08EB0 /* libSystem.B.tbd */,
+				A1AIRLIFT00000001A1AIRLIFT /* AirliftFFI.xcframework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -517,6 +521,7 @@
 					"$(inherited)",
 					"$(SRCROOT)/lara",
 					"$(SRCROOT)/lara/kexploit",
+					"$(SRCROOT)/rust-core/include",
 				);
 				INFOPLIST_FILE = lara/Info.plist;
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
@@ -569,6 +574,7 @@
 					"$(inherited)",
 					"$(SRCROOT)/lara",
 					"$(SRCROOT)/lara/kexploit",
+					"$(SRCROOT)/rust-core/include",
 				);
 				INFOPLIST_FILE = lara/Info.plist;
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
