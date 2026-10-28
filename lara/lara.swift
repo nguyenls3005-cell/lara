@@ -85,6 +85,9 @@ struct lara: App {
         
         globallogger.capture()
         
+        // Airlift — install FFI log bridge once at launch
+        AirliftBridge.shared.configureLogging()
+        
         // ==========================================
         // FIX BOOTLOOP: TỰ ĐỘNG ROLLBACK MOBILEGESTALT KHI APP KHỞI ĐỘNG
         // ==========================================
