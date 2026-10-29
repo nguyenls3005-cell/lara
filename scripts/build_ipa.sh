@@ -1,53 +1,39 @@
 #!/usr/bin/env bash
-# build_ipa.sh — patch edition, boss man
+# build_ipa.sh — round 3, no custom modulemap, let Xcode own the copy step
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 XCF="$ROOT/Frameworks/AirliftFFI.xcframework/ios-arm64"
-HEADERS="$XCF/Headers"
 
-# 1) Nuke the duplicated modulemap that Xcode copy-steps into BuildProducts/include.
-#    We keep ONE authoritative map (the one inside the xcframework) and feed it
-#    through the bridging header path instead of a raw HEADER_SEARCH_PATHS.
-STAGE="$ROOT/.axiom_stage/headers"
-rm -rf "$STAGE"
-mkdir -p "$STAGE"
+# 1) Rip out the custom stage that was shadowing the real module
+rm -rf "$ROOT/.axiom_stage"
 
-# Copy headers WITHOUT module.modulemap so no duplicate module gets discovered
-find "$HEADERS" -maxdepth 1 -type f ! -name 'module.modulemap' -exec cp {} "$STAGE/" \;
+# 2) Blow away any stray module.modulemap in the include folder that Xcode's
+#    previous runs left behind — those are the shadowers now.
+find "$ROOT/build" -type f -name 'module.modulemap' -path '*include*' -delete 2>/dev/null || true
 
-# Single canonical modulemap lives here
-cat > "$ROOT/.axiom_stage/AirliftFFI.modulemap" <<'EOF'
-module AirliftFFI {
-    header "airlift_ffi.h"
-    export *
-}
-EOF
-
-# 2) Wipe stale derived-data include caches that hold the duplicated map
+# 3) Clear DerivedData shadow caches for this project only
 DERIVED="/Users/runner/Library/Developer/Xcode/DerivedData"
-find "$DERIVED" -type f -path '*ArchiveIntermediates*/*/BuildProductsPath/*/include/module.modulemap' -delete 2>/dev/null || true
+if [ -d "$DERIVED" ]; then
+  find "$DERIVED" -maxdepth 1 -type d -name 'lara-*' -exec rm -rf {} + 2>/dev/null || true
+fi
 
-# 3) Clean build w/o the double modulemap. Notice: HEADER_SEARCH_PATHS no longer
-#    points at the xcframework Headers dir. We only pass a fmodule-map-file ONCE.
+# 4) Build. The big change: HEADER_SEARCH_PATHS is EMPTY. We do NOT pass any
+#    custom -fmodule-map-file. ProcessXCFramework will drop the xcframework's
+#    single canonical module.modulemap into BuildProductsPath/Debug-iphoneos/include
+#    and Xcode adds that path automatically. ONE modulemap. No shadows.
 xcodebuild \
   -project lara.xcodeproj \
   -scheme lara \
   -configuration Debug \
   -sdk iphoneos \
   -arch arm64 \
-  "OTHER_LDFLAGS=-force_load $XCF/libairlift_ffi.a \
-     -framework Security -framework SystemConfiguration \
-     -framework UIKit -framework Foundation \
-     -framework NetworkExtension -framework MobileCoreServices" \
+  "OTHER_LDFLAGS=-force_load $XCF/libairlift_ffi.a -framework Security -framework SystemConfiguration -framework UIKit -framework Foundation -framework NetworkExtension -framework MobileCoreServices" \
   "SWIFT_OBJC_BRIDGING_HEADER=$ROOT/lara/lara-Bridging-Header.h" \
   "FRAMEWORK_SEARCH_PATHS=$XCF" \
-  "HEADER_SEARCH_PATHS=$STAGE" \
-  "SWIFT_INCLUDE_PATHS=$ROOT/.axiom_stage" \
-  "OTHER_SWIFT_FLAGS=-Xcc -fmodule-map-file=$ROOT/.axiom_stage/AirliftFFI.modulemap" \
-  "CLANG_MODULES_AUTOLINK=YES" \
+  "HEADER_SEARCH_PATHS=" \
   "CODE_SIGNING_ALLOWED=NO" \
   "CODE_SIGNING_REQUIRED=NO" \
   "CODE_SIGN_IDENTITY=" \
